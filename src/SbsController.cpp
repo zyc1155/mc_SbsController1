@@ -1,7 +1,7 @@
 #include "SbsController.h"
 
 SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rtc::Configuration & config)
-: mc_control::MCController(rm, dt), right_falcon(0)//, left_falcon(1)
+: mc_control::MCController(rm, dt)//, right_falcon(0)//, left_falcon(1)
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
@@ -154,10 +154,16 @@ void SbsController::get_values()
 void SbsController::set_CtrlPos()
 {
 
-  posRB_ = right_falcon.Get_Pos();
+  // posRB_ = right_falcon.Get_Pos();
   // posRA_ = left_falcon.Get_Pos();
   posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
   posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
+
+  if(ttime<5.0)
+    posRB = Eigen::Matrix3d::Zero();
+  else
+    posRB << .0,.0, 0.01;
+
 
   if (first)
   {

@@ -8,7 +8,6 @@
 
 
 #include "api.h"
-#include "driver.h"
 
 const double GRAVITY = 9.8;
 const double HEIGHTREF=0.9;
@@ -31,7 +30,7 @@ struct SbsController_DLLAPI SbsController : public mc_control::MCController
 
     Eigen::Vector3d sat_func(double lim, const Eigen::Vector3d& val);
 private:
-    Falcon_Driver right_falcon;//, left_falcon;
+    //Falcon_Driver right_falcon;//, left_falcon;
     mc_rtc::Configuration config_;
     std::shared_ptr<mc_tasks::CoMTask> comTask;
     std::shared_ptr<mc_tasks::OrientationTask> otTask;
