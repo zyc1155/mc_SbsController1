@@ -71,7 +71,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   }
 
   first = true;
-  fp = fopen("/home/zyc/data.csv", "w");
+  //fp = fopen("/home/zyc/data.csv", "w");
 
 
 
@@ -92,7 +92,7 @@ bool SbsController::run()
   state_swiching();
   set_desiredVel();
   set_desiredTask();
-  output_data();
+  //output_data();
 
   if (first)
     first = false;
