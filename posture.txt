@@ -1,0 +1,22 @@
+_ref_joint_order = {"RCY", "RCR", "RCP", "RKP", "RAP", "RAR", 
+  "LCY", "LCR", "LCP", "LKP", "LAP", "LAR", 
+  "WP", "WR", "WY", 
+  "HY", "HP", 
+  "RSC", "RSP", "RSR", "RSY", "REP", "RWRY", "RWRR", "RWRP", "RHDY", "RIMP", "RIPIP", "RIDIP", "RMMP", "RMPIP", "RMDIP", "RTMP", "RTPIP", "RTDIP", 
+  "LSC", "LSP", "LSR", "LSY", "LEP", "LWRY", "LWRR", "LWRP", "LHDY", "LIMP", "LIPIP", "LIDIP", "LMMP", "LMPIP", "LMDIP", "LTMP", "LTPIP", "LTDIP"};
+
+  std::vector<double> half_posture={-0.00031661596547851736, -0.005165968895515265, -0.7347631236580912, 1.2971669220833832, -0.55, 0.005176318653034121, -0.0003166095186248019, -0.005165864208169415, -0.7345551729747, 1.2967587526466762, -0.55, 0.005176213767377753};
+
+  for(int i=0; i<12; i++)
+  {
+    _stance[_ref_joint_order[i]]={half_posture[i]};
+  }
+
+  _stance["RSR"]={-0.5};
+  _stance["LSR"]={0.5};
+
+  _stance["LEP"]={-0.29};
+  _stance["LTMP"]={-0.09};
+
+  _stance["REP"]={-0.29};
+  _stance["RTMP"]={0.09};
