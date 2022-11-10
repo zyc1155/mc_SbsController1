@@ -160,7 +160,7 @@ void SbsController::set_CtrlPos()
   posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
 
   if(ttime<5.0)
-    posRB = Eigen::Matrix3d::Zero();
+    posRB = Eigen::Vector3d::Zero();
   else
     posRB << .0,.0, 0.01;
 
