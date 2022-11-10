@@ -1,11 +1,9 @@
 set(controller_SRC
   SbsController.cpp
-  driver.cpp
 )
 
 set(controller_HDR
   SbsController.h
-  driver.h
 )
 
 add_controller(${PROJECT_NAME} ${controller_SRC} ${controller_HDR})
