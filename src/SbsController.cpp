@@ -1,7 +1,7 @@
 #include "SbsController.h"
 
 SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rtc::Configuration & config)
-: mc_control::MCController(rm, dt), right_falcon(0)//, left_falcon(1)
+: mc_control::MCController(rm, dt), right_falcon(0), left_falcon(1)
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
@@ -41,8 +41,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   postureTask->dimWeight(ww);
 
-  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5",50.0,1.0);
-  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5",50.0,1.0);
+  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5",5.0,1.0);
+  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5",5.0,1.0);
 
   // efTask_left->positionTask->stiffness(10.0);
   // efTask_left->orientationTask->stiffness(10.0);
@@ -157,7 +157,7 @@ void SbsController::set_CtrlPos()
 {
 
   posRB_ = right_falcon.Get_Pos();
-  // posRA_ = left_falcon.Get_Pos();
+  posRA_ = left_falcon.Get_Pos();
   posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
   posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
 
