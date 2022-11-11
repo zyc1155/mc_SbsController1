@@ -5,7 +5,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
-  solver().addConstraintSet(kinematicsConstraint);
+  //solver().addConstraintSet(kinematicsConstraint);
   // posTask = std::make_shared<mc_tasks::PostureTask>(robots(), 0, 10.0, 1.0);
   solver().addTask(postureTask);
 
@@ -36,8 +36,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   postureTask->jointStiffness(solver(), stiffnesses);
 
   Eigen::VectorXd ww(60);
-  ww.head(18) = Eigen::MatrixXd::Constant(12, 1, 1.0);
-  ww.tail(42) = Eigen::MatrixXd::Constant(48, 1, 1000.0);
+  ww.head(18) = Eigen::MatrixXd::Constant(18, 1, 1.0);
+  ww.tail(42) = Eigen::MatrixXd::Constant(42, 1, 1000.0);
 
   postureTask->dimWeight(ww);
 
@@ -59,6 +59,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   ctrl_mode = 0;
   ctrl_mode2 = 0;
   W_v_GWd = Eigen::Vector3d::Zero();
+  Q_epd = Eigen::Vector3d::Zero();
   omega = sqrt(GRAVITY / HEIGHTREF);
   COMShifter_Kp = Eigen::Matrix3d::Zero();
   COMShifter_Kd = Eigen::Matrix3d::Zero();
@@ -71,7 +72,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   }
 
   first = true;
-  fp = fopen("/home/zyc/data.csv", "w");
+  //fp = fopen("/home/zyc/data.csv", "w");
 
 
 
@@ -92,7 +93,7 @@ bool SbsController::run()
   state_swiching();
   set_desiredVel();
   set_desiredTask();
-  output_data();
+  //output_data();
 
   if (first)
     first = false;
@@ -125,8 +126,8 @@ void SbsController::get_values()
   int Joint_Index;
   for(int i=0;i<12;i++)
   {  
-    Joint_Index=robot().jointIndexByName(activeJoints[i]);
-    postureTask->target({{activeJoints[i],robot().q()[Joint_Index]}});
+    Joint_Index=realRobot().jointIndexByName(activeJoints[i]);
+    postureTask->target({{activeJoints[i],realRobot().q()[Joint_Index]}});
   }
 
   A_f_A = left.force();
@@ -135,17 +136,17 @@ void SbsController::get_values()
   B_f_B = right.force();
   B_n_B = right.moment();
 
-  W_R_A = robot().surfacePose("LeftFootCenter").rotation();
-  W_p_AW = robot().surfacePose("LeftFootCenter").translation();
+  W_R_A = realRobot().surfacePose("LeftFootCenter").rotation();
+  W_p_AW = realRobot().surfacePose("LeftFootCenter").translation();
 
-  W_R_B = robot().surfacePose("RightFootCenter").rotation();
-  W_p_BW = robot().surfacePose("RightFootCenter").translation();
+  W_R_B = realRobot().surfacePose("RightFootCenter").rotation();
+  W_p_BW = realRobot().surfacePose("RightFootCenter").translation();
 
-  W_p_GW = robot().com();
-  W_v_GW = robot().comVelocity();
-  W_a_GW = robot().comAcceleration();
+  W_p_GW = realRobot().com();
+  W_v_GW = realRobot().comVelocity();
+  W_a_GW = realRobot().comAcceleration();
 
-  W_R_H = robot().bodyPosW("Body").rotation();
+  W_R_H = realRobot().bodyPosW("Body").rotation();
 
   Q_ep = W_p_GW - W_a_GW / (omega * omega);
   Q_ep(2) = Q_ep(2) - HEIGHTREF;
@@ -199,8 +200,8 @@ void SbsController::state_swiching()
       solver().removeTask(efTask_right);
       addContact({robot().name(), "ground", "RightFoot", "AllGround"});
 
-      otTask->dimWeight(Eigen::MatrixXd::Constant(3,1,1000.0));
-      otTask->stiffness(10.0);
+      // otTask->dimWeight(Eigen::MatrixXd::Constant(3,1,1000.0));
+      // otTask->stiffness(50.0);
     }
   }
   else if (ctrl_mode == 5)
@@ -228,8 +229,8 @@ void SbsController::state_swiching()
       solver().removeTask(efTask_left);
       addContact({robot().name(), "ground", "LeftFoot", "AllGround"});
 
-      otTask->dimWeight(Eigen::MatrixXd::Constant(3,1,1000.0));
-      otTask->stiffness(10.0);
+      // otTask->dimWeight(Eigen::MatrixXd::Constant(3,1,1000.0));
+      // otTask->stiffness(10.0);
     }
   }
   else if ((ctrl_mode == 0 && vel_posRB(2) > 0.1 && posRB(2) > 0.0))
@@ -298,20 +299,22 @@ void SbsController::set_desiredTask()
   comTask->refVel(W_v_GWd);
   comTask->com(W_p_GW_ref);
 
+  otTask->orientation(Eigen::Matrix3d::Identity());
+
   if ((ctrl_mode == 0 || ctrl_mode == 1 || ctrl_mode == 5))
   {
-    otTask->orientation(Eigen::Matrix3d::Identity());
+    //otTask->orientation(Eigen::Matrix3d::Identity());
   }
   else if (ctrl_mode2 == 0)
   {
     efTask_right->set_ef_pose(sva::PTransformd(A_p_BA_ref));
 
-    otTask->orientation(W_R_H);
+    // otTask->orientation(W_R_H);
   }
   else if (ctrl_mode2 == 1)
   {
     efTask_left->set_ef_pose(sva::PTransformd(B_p_AB_ref));
-    otTask->orientation(W_R_H);
+    // otTask->orientation(W_R_H);
   }
 }
 
