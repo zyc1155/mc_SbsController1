@@ -35,9 +35,9 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   }
   postureTask->jointStiffness(solver(), stiffnesses);
 
-  Eigen::VectorXd ww(60);
+  Eigen::VectorXd ww(59);
   ww.head(18) = Eigen::MatrixXd::Constant(18, 1, 1.0);
-  ww.tail(42) = Eigen::MatrixXd::Constant(42, 1, 1000.0);
+  ww.tail(41) = Eigen::MatrixXd::Constant(41, 1, 1000.0);
 
   postureTask->dimWeight(ww);
 
@@ -72,9 +72,10 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   }
 
   first = true;
-  //fp = fopen("/home/zyc/data.csv", "w");
+  // fp = fopen("/home/zyc/data.csv", "w");
 
-
+  // gui()->addElement({"a"},
+  // mc_rtc::gui::Point3D("Point", [this]() { return W_p_BW; }));
 
   mc_rtc::log::success("SbsController init done ");
 }
