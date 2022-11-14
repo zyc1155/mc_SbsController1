@@ -5,12 +5,13 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
-  //solver().addConstraintSet(kinematicsConstraint);
+  solver().addConstraintSet(kinematicsConstraint); //selfCollisionConstraint
+  solver().addConstraintSet(selfCollisionConstraint);
   // posTask = std::make_shared<mc_tasks::PostureTask>(robots(), 0, 10.0, 1.0);
   solver().addTask(postureTask);
 
   std::vector<std::string> activeJoints = {"RCY", "RCR", "RCP", "RKP", "RAP", "RAR", "LCY", "LCR", "LCP", "LKP", "LAP", "LAR"};
-  comTask = std::make_shared<mc_tasks::CoMTask>(robots(), 0, 50.0, 1000.0);
+  comTask = std::make_shared<mc_tasks::CoMTask>(robots(), 0, 100.0, 1000.0);
   // comTask->selectActiveJoints(solver(), activeJoints);
   solver().addTask(comTask);
 
@@ -20,9 +21,11 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   addContact({robot().name(), "ground", "RightFoot", "AllGround"});
 
   otTask = std::make_shared<mc_tasks::OrientationTask>("Body", robots(), 0, 50.0, 1.0);
-  // otTask->selectActiveJoints(solver(), activeJoints);
+
   otTask->dimWeight(Eigen::MatrixXd::Constant(3,1,1000.0));
   solver().addTask(otTask);
+
+  otTask->orientation(Eigen::Matrix3d::Identity());
 
   postureTask->stiffness(50.0);
   postureTask->weight(1.0);
@@ -41,8 +44,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   postureTask->dimWeight(ww);
 
-  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5",5.0,1.0);
-  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5",5.0,1.0);
+  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5",50.0,1.0);
+  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5",50.0,1.0);
 
   // efTask_left->positionTask->stiffness(10.0);
   // efTask_left->orientationTask->stiffness(10.0);
@@ -72,10 +75,21 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   }
 
   first = true;
-  // fp = fopen("/home/zyc/data.csv", "w");
+  //fp = fopen("/home/zyc/data.csv", "w");
 
+  leftFootRatio = 0.5;
+  datastore().make_call("KinematicAnchorFrame::" + robot().name(),
+                          [this](const mc_rbdyn::Robot & robot)
+                          {
+                            return sva::interpolate(robot.surfacePose("RightFoot"),
+                                                    robot.surfacePose("LeftFoot"),
+                                                    leftFootRatio);
+                          });
+
+  //mc_rtc::gui::Color::Color(mc_rtc::gui::Color::Blue);
   // gui()->addElement({"a"},
-  // mc_rtc::gui::Point3D("Point", [this]() { return W_p_BW; }));
+  // mc_rtc::gui::Point3D("COM", [this]() { 	return W_p_GW_; }),
+  // mc_rtc::gui::Point3D("ZMP", [this]() { 	return W_Q_W; }));
 
   mc_rtc::log::success("SbsController init done ");
 }
@@ -127,8 +141,8 @@ void SbsController::get_values()
   int Joint_Index;
   for(int i=0;i<12;i++)
   {  
-    Joint_Index=realRobot().jointIndexByName(activeJoints[i]);
-    postureTask->target({{activeJoints[i],realRobot().q()[Joint_Index]}});
+    Joint_Index=robot().jointIndexByName(activeJoints[i]);
+    postureTask->target({{activeJoints[i],robot().q()[Joint_Index]}});
   }
 
   A_f_A = left.force();
@@ -137,17 +151,26 @@ void SbsController::get_values()
   B_f_B = right.force();
   B_n_B = right.moment();
 
-  W_R_A = realRobot().surfacePose("LeftFootCenter").rotation();
-  W_p_AW = realRobot().surfacePose("LeftFootCenter").translation();
+  W_R_A = robot().surfacePose("LeftFootCenter").rotation();
+  W_p_AW = robot().surfacePose("LeftFootCenter").translation();
 
-  W_R_B = realRobot().surfacePose("RightFootCenter").rotation();
-  W_p_BW = realRobot().surfacePose("RightFootCenter").translation();
+  W_p_AW_ = realRobot().surfacePose("LeftFootCenter").translation();
 
-  W_p_GW = realRobot().com();
-  W_v_GW = realRobot().comVelocity();
-  W_a_GW = realRobot().comAcceleration();
+  W_R_B = robot().surfacePose("RightFootCenter").rotation();
+  W_p_BW = robot().surfacePose("RightFootCenter").translation();
 
-  W_R_H = realRobot().bodyPosW("Body").rotation();
+  W_p_BW_= realRobot().surfacePose("RightFootCenter").translation();
+
+  W_p_GW = robot().com();
+  W_v_GW = robot().comVelocity();
+  W_a_GW = robot().comAcceleration();
+
+  W_p_GW_= realRobot().com();
+  W_p_GW_(2) = 0.0;
+
+  W_R_H = robot().bodyPosW("Body").rotation();
+
+  R_0_mIMU = robot().bodySensor("Accelerometer").orientation().toRotationMatrix();
 
   Q_ep = W_p_GW - W_a_GW / (omega * omega);
   Q_ep(2) = Q_ep(2) - HEIGHTREF;
@@ -160,6 +183,11 @@ void SbsController::set_CtrlPos()
   posRA_ = left_falcon.Get_Pos();
   posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
   posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
+
+  // if(ttime < 5.0)
+  //   posRB << .0,.0,.0;
+  // else
+  //   posRB << .0,.0,0.01;
 
   if (first)
   {
@@ -186,6 +214,8 @@ void SbsController::state_swiching()
       ctrl_mode = 2;
       timer_mode = 0.0;
 
+      leftFootRatio = 1.0;
+
       removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
       solver().addTask(efTask_right);
 
@@ -201,8 +231,8 @@ void SbsController::state_swiching()
       solver().removeTask(efTask_right);
       addContact({robot().name(), "ground", "RightFoot", "AllGround"});
 
-      // otTask->dimWeight(Eigen::MatrixXd::Constant(3,1,1000.0));
-      // otTask->stiffness(50.0);
+      leftFootRatio = 0.5;
+
     }
   }
   else if (ctrl_mode == 5)
@@ -214,6 +244,8 @@ void SbsController::state_swiching()
     {
       ctrl_mode = 6;
       timer_mode = 0.0;
+
+      leftFootRatio = 0.0;
 
       removeContact({robot().name(), "ground", "LeftFoot", "AllGround"});
       solver().addTask(efTask_left);
@@ -230,8 +262,8 @@ void SbsController::state_swiching()
       solver().removeTask(efTask_left);
       addContact({robot().name(), "ground", "LeftFoot", "AllGround"});
 
-      // otTask->dimWeight(Eigen::MatrixXd::Constant(3,1,1000.0));
-      // otTask->stiffness(10.0);
+      leftFootRatio = 0.5;
+
     }
   }
   else if ((ctrl_mode == 0 && vel_posRB(2) > 0.1 && posRB(2) > 0.0))
@@ -327,6 +359,10 @@ void SbsController::output_data()
 
   for (int i = 0; i < 3; i++)
     fprintf(fp, ",%.6lf", Q_ref(i));
+
+  fprintf(fp, ",");
+  for (int i = 0; i < 3; i++)
+    fprintf(fp, ",%.6lf", Q_epd(i));
 
   fprintf(fp, ",");
   for (int i = 0; i < 3; i++)
