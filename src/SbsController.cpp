@@ -5,9 +5,10 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
-  solver().addConstraintSet(kinematicsConstraint); //selfCollisionConstraint
+  solver().addConstraintSet(kinematicsConstraint);
   solver().addConstraintSet(selfCollisionConstraint);
-  // posTask = std::make_shared<mc_tasks::PostureTask>(robots(), 0, 10.0, 1.0);
+  solver().addConstraintSet(*compoundJointConstraint);
+
   solver().addTask(postureTask);
 
   std::vector<std::string> activeJoints = {"RCY", "RCR", "RCP", "RKP", "RAP", "RAR", "LCY", "LCR", "LCP", "LKP", "LAP", "LAR"};
@@ -86,7 +87,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
                                                     leftFootRatio);
                           });
 
-  //mc_rtc::gui::Color::Color(mc_rtc::gui::Color::Blue);
+
   // gui()->addElement({"a"},
   // mc_rtc::gui::Point3D("COM", [this]() { 	return W_p_GW_; }),
   // mc_rtc::gui::Point3D("ZMP", [this]() { 	return W_Q_W; }));
@@ -138,12 +139,6 @@ void SbsController::get_values()
     W_Q_W = realRobot().zmp(world_wrench, ZMP_frame);
   // std::vector<std::vector<double> > zyc;
   // zyc=robot().q();
-  int Joint_Index;
-  for(int i=0;i<12;i++)
-  {  
-    Joint_Index=robot().jointIndexByName(activeJoints[i]);
-    postureTask->target({{activeJoints[i],robot().q()[Joint_Index]}});
-  }
 
   A_f_A = left.force();
   A_n_A = left.moment();
@@ -328,11 +323,21 @@ void SbsController::set_desiredVel()
 
 void SbsController::set_desiredTask()
 {
+  std::vector<std::string> activeJoints = {"LCY", "LCR", "LCP", "LKP", "LAP", "LAR", "RCY", "RCR", "RCP", "RKP", "RAP", "RAR"};
+  
   comTask->refAccel(W_a_GWd);
   comTask->refVel(W_v_GWd);
   comTask->com(W_p_GW_ref);
 
   otTask->orientation(Eigen::Matrix3d::Identity());
+
+  int Joint_Index;
+  for(int i=0;i<12;i++)
+  {  
+    Joint_Index=robot().jointIndexByName(activeJoints[i]);
+    postureTask->target({{activeJoints[i],robot().q()[Joint_Index]}});
+  }
+  //postureTask->target({{"LSP", {-6.2}}});
 
   if ((ctrl_mode == 0 || ctrl_mode == 1 || ctrl_mode == 5))
   {
