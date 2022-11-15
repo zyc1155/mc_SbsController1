@@ -223,13 +223,13 @@ void SbsController::state_swiching()
     ctrl_mode2 = 0;
     if (fabs(A_p_QA(0)) < 0.08 && fabs(A_p_QA(1)) < 0.04)
     {
-      ctrl_mode = 2;
-      timer_mode = 0.0;
+      //ctrl_mode = 2;
+      //timer_mode = 0.0;
 
-      leftFootRatio = 1.0;
+      //leftFootRatio = 1.0;
 
-      removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
-      solver().addTask(efTask_right);
+      //removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
+      //solver().addTask(efTask_right);
 
     }
   }
