@@ -1,7 +1,7 @@
 #include "SbsController.h"
 
 SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rtc::Configuration & config)
-: mc_control::MCController(rm, dt), right_falcon(0), left_falcon(1)
+: mc_control::MCController(rm, dt)//, right_falcon(0), left_falcon(1)
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
@@ -45,8 +45,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   postureTask->dimWeight(ww);
 
-  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5",50.0,1.0);
-  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5",50.0,1.0);
+  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5",5.0,1.0);
+  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5",5.0,1.0);
 
   // efTask_left->positionTask->stiffness(10.0);
   // efTask_left->orientationTask->stiffness(10.0);
@@ -70,13 +70,13 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   for (int i = 0; i < 3; i++)
   {
-    COMShifter_Kp(i, i) = 70.0;
+    COMShifter_Kp(i, i) = 20.0;
 
     COMShifter_Kd(i, i) = COMShifter_Kp(i, i) / omega + omega;
   }
 
   first = true;
-  //fp = fopen("/home/zyc/data.csv", "w");
+  fp = fopen("/home/zyc/data.csv", "w");
 
   leftFootRatio = 0.5;
   datastore().make_call("KinematicAnchorFrame::" + robot().name(),
@@ -91,6 +91,11 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   // gui()->addElement({"a"},
   // mc_rtc::gui::Point3D("COM", [this]() { 	return W_p_GW_; }),
   // mc_rtc::gui::Point3D("ZMP", [this]() { 	return W_Q_W; }));
+
+  logger().addLogEntries(this,
+                       "real_COM", [this]() { return W_p_GW_; },
+                       "ZMP", [this]() { return W_Q_W; },
+                       "EZMP", [this]() { return Q_ep; });
 
   mc_rtc::log::success("SbsController init done ");
 }
@@ -109,7 +114,7 @@ bool SbsController::run()
   state_swiching();
   set_desiredVel();
   set_desiredTask();
-  //output_data();
+  output_data();
 
   if (first)
     first = false;
@@ -161,7 +166,7 @@ void SbsController::get_values()
   W_a_GW = robot().comAcceleration();
 
   W_p_GW_= realRobot().com();
-  W_p_GW_(2) = 0.0;
+  //W_p_GW_(2) = 0.0;
 
   W_R_H = robot().bodyPosW("Body").rotation();
 
@@ -174,15 +179,15 @@ void SbsController::get_values()
 void SbsController::set_CtrlPos()
 {
 
-  posRB_ = right_falcon.Get_Pos();
-  posRA_ = left_falcon.Get_Pos();
+  //posRB_ = right_falcon.Get_Pos();
+  //posRA_ = left_falcon.Get_Pos();
   posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
   posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
 
-  // if(ttime < 5.0)
-  //   posRB << .0,.0,.0;
-  // else
-  //   posRB << .0,.0,0.01;
+  if(ttime < 5.0)
+    posRB << .0,.0,.0;
+  else
+    posRB << .0,.0,0.01;
 
   if (first)
   {
@@ -365,13 +370,13 @@ void SbsController::output_data()
   for (int i = 0; i < 3; i++)
     fprintf(fp, ",%.6lf", Q_ref(i));
 
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", Q_epd(i));
+  // fprintf(fp, ",");
+  // for (int i = 0; i < 3; i++)
+  //   fprintf(fp, ",%.6lf", Q_epd(i));
 
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", Q_ep(i));
+  // fprintf(fp, ",");
+  // for (int i = 0; i < 3; i++)
+  //   fprintf(fp, ",%.6lf", Q_ep(i));
 
   fprintf(fp, ",");
   for (int i = 0; i < 3; i++)
@@ -383,7 +388,7 @@ void SbsController::output_data()
 
   fprintf(fp, ",");
   for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", W_p_GW(i));
+    fprintf(fp, ",%.6lf", W_p_GW_(i));
 
   // fprintf(fp, ",");
   // for (int i = 0; i < 3; i++)
