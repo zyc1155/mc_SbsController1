@@ -45,8 +45,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   postureTask->dimWeight(ww);
 
-  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5",50.0,1.0);
-  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5",50.0,1.0);
+  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5",5.0,1.0);
+  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5",5.0,1.0);
 
   // efTask_left->positionTask->stiffness(10.0);
   // efTask_left->orientationTask->stiffness(10.0);
@@ -70,7 +70,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   for (int i = 0; i < 3; i++)
   {
-    COMShifter_Kp(i, i) = 70.0;
+    COMShifter_Kp(i, i) = 20.0;
 
     COMShifter_Kd(i, i) = COMShifter_Kp(i, i) / omega + omega;
   }
@@ -92,6 +92,15 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   // mc_rtc::gui::Point3D("COM", [this]() { 	return W_p_GW_; }),
   // mc_rtc::gui::Point3D("ZMP", [this]() { 	return W_Q_W; }));
 
+  createGUI();
+
+  logger().addLogEntries(this,
+                       "left_foot_center", [this]() { return W_p_AW_; }, 
+                       "right_foot_center", [this]() { return W_p_BW_; },
+                       "real_COM", [this]() { return W_p_GW_; },
+                       "ZMP", [this]() { return W_Q_W; },
+                       "EZMP", [this]() { return Q_ep; });
+	
   mc_rtc::log::success("SbsController init done ");
 }
 
@@ -161,7 +170,7 @@ void SbsController::get_values()
   W_a_GW = robot().comAcceleration();
 
   W_p_GW_= realRobot().com();
-  W_p_GW_(2) = 0.0;
+  //W_p_GW_(2) = 0.0;
 
   W_R_H = robot().bodyPosW("Body").rotation();
 
@@ -176,13 +185,21 @@ void SbsController::set_CtrlPos()
 
   posRB_ = right_falcon.Get_Pos();
   posRA_ = left_falcon.Get_Pos();
-  posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
-  posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
+
+  //posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
+  //posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
+  posRB << 0, 0, 0;
+  posRA << 0, 0, 0;
 
   // if(ttime < 5.0)
   //   posRB << .0,.0,.0;
   // else
   //   posRB << .0,.0,0.01;
+
+  if (rightFootLift_)
+  {
+    posRB << .0, .0, .01;
+  }
 
   if (first)
   {
@@ -430,5 +447,14 @@ Eigen::Vector3d SbsController::sat_func(double _lim, const Eigen::Vector3d &val)
 
   return result;
 }
+
+void SbsController::createGUI()
+{
+  //auto & gui = *ctl.gui();
+  gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::Label("Lift right foot", [this]() { return rightFootLift_; }),
+                 mc_rtc::gui::Checkbox(
+                     "Activated", [this]() { return rightFootLift_; }, [this]() { rightFootLift_ = !rightFootLift_; }));
+}
+
 
 CONTROLLER_CONSTRUCTOR("SbsController", SbsController)

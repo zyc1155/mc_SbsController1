@@ -12,7 +12,7 @@
 
 const double GRAVITY = 9.8;
 const double HEIGHTREF=0.9;
-const double A_LIM=0.5;
+const double A_LIM=0.3;
 
 
 struct SbsController_DLLAPI SbsController : public mc_control::MCController
@@ -31,6 +31,10 @@ struct SbsController_DLLAPI SbsController : public mc_control::MCController
     void output_data();
 
     Eigen::Vector3d sat_func(double lim, const Eigen::Vector3d& val);
+
+protected:
+  void createGUI();
+
 private:
     Falcon_Driver right_falcon, left_falcon;
     mc_rtc::Configuration config_;
@@ -61,4 +65,6 @@ private:
 
     sva::ForceVecd left, right, world_wrench;
 
+    // Set 'true' to lift right foot
+    bool rightFootLift_ = false;
 };
