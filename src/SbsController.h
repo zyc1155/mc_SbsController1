@@ -36,7 +36,7 @@ protected:
   void createGUI();
 
 private:
-    Falcon_Driver right_falcon, left_falcon;
+    //Falcon_Driver right_falcon, left_falcon;
     mc_rtc::Configuration config_;
     std::shared_ptr<mc_tasks::CoMTask> comTask;
     std::shared_ptr<mc_tasks::OrientationTask> otTask;
