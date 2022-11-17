@@ -9,6 +9,7 @@
 
 #include "api.h"
 #include "driver.h"
+#include "Tra_Gen.h"
 
 const double GRAVITY = 9.8;
 const double HEIGHTREF=0.9;
@@ -53,17 +54,21 @@ private:
 
     Eigen::Vector3d posRA_, posRB_;
     Eigen::Vector3d posRA, posRB, posRAp, posRBp, vel_posRA, vel_posRB;
-    Eigen::Vector3d Q_ref, Q_ep, Q_epd, W_Q_W;
+    Eigen::Vector3d Q_ref, Q_ep, Q_epd, W_Q_W, W_Q_A, W_Q_B, W_Q;
 
-    Eigen::Vector3d W_p_AW, W_p_BW, W_p_GW, W_p_BW_,W_p_GW_, W_p_AW_ ;
+    Eigen::Vector3d W_p_AW, W_p_BW, W_p_GW, W_p_BW_,W_p_GW_p, W_p_AW_ ;
     Eigen::Matrix3d R_0_mIMU;
     Eigen::Matrix3d W_R_A, W_R_B, W_R_H;
     Eigen::Vector3d A_p_BA_ref, B_p_AB_ref, W_p_GW_ref;
-    Eigen::Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd;
+    Eigen::Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd, W_v_GW_p;
 
-    Eigen::Vector3d A_f_A, B_f_B, A_n_A, B_n_B;
+    Eigen::Vector3d A_f_A, B_f_B, A_n_A, B_n_B, W_f_A, W_f_B, W_n_A, W_n_B;
 
     sva::ForceVecd left, right, world_wrench;
+
+    Eigen::Matrix3d zyc_R;
+
+    Eigen::Vector3d zyc_p;
 
     // Set 'true' to lift right foot
     bool rightFootLift_ = false;

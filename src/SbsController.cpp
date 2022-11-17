@@ -12,8 +12,9 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   solver().addTask(postureTask);
 
   std::vector<std::string> activeJoints = {"RCY", "RCR", "RCP", "RKP", "RAP", "RAR", "LCY", "LCR", "LCP", "LKP", "LAP", "LAR"};
+  comTask.reset(new mc_tasks::CoMTask(robots(), robots().robotIndex()));
   comTask = std::make_shared<mc_tasks::CoMTask>(robots(), 0, 100.0, 1000.0);
-  // comTask->selectActiveJoints(solver(), activeJoints);
+
   solver().addTask(comTask);
 
   solver().setContacts({{}});
@@ -21,7 +22,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   addContact({robot().name(), "ground", "LeftFoot", "AllGround"});
   addContact({robot().name(), "ground", "RightFoot", "AllGround"});
 
-  otTask = std::make_shared<mc_tasks::OrientationTask>("Body", robots(), 0, 50.0, 1.0);
+
+  otTask = std::make_shared<mc_tasks::OrientationTask>("Body", robots(), 0, 100.0, 1.0);
 
   otTask->dimWeight(Eigen::MatrixXd::Constant(3,1,1000.0));
   solver().addTask(otTask);
@@ -60,6 +62,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
 
   ttime = 0;
+
   ctrl_mode = 0;
   ctrl_mode2 = 0;
   W_v_GWd = Eigen::Vector3d::Zero();
@@ -88,18 +91,27 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
                           });
 
 
-  // gui()->addElement({"a"},
-  // mc_rtc::gui::Point3D("COM", [this]() { 	return W_p_GW_; }),
-  // mc_rtc::gui::Point3D("ZMP", [this]() { 	return W_Q_W; }));
+  gui()->addElement({"a"},
+  mc_rtc::gui::Point3D("ZMP", [this]() { 	return W_Q; }));
 
   createGUI();
 
   logger().addLogEntries(this,
-                       "left_foot_center", [this]() { return W_p_AW_; }, 
-                       "right_foot_center", [this]() { return W_p_BW_; },
-                       "real_COM", [this]() { return W_p_GW_; },
-                       "ZMP", [this]() { return W_Q_W; },
-                       "EZMP", [this]() { return Q_ep; });
+                       "left_foot_center", [this]() { return W_p_AW; }, 
+                       "right_foot_center", [this]() { return W_p_BW; },
+                       "real_COM_p", [this]() { return W_p_GW; },
+                       "real_COM_v", [this]() { return W_v_GW; },
+                       "real_COM_a", [this]() { return W_a_GW; },
+                       "ZMP_total", [this]() { return W_Q; },
+                       "ZMP_L", [this]() { return W_Q_A; },
+                       "ZMP_R", [this]() { return W_Q_B; },
+                       "EZMP", [this]() { return Q_epd; },
+                       "fuck", [this]() {
+                            Eigen::Vector3d zzz;
+                            zzz =  zyc_R.transpose() * (W_p_AW - zyc_p);
+
+                           return zzz; },
+                       "real_EZMP", [this]() { return Q_ep; });
 	
   mc_rtc::log::success("SbsController init done ");
 }
@@ -128,9 +140,11 @@ bool SbsController::run()
 
 void SbsController::reset(const mc_control::ControllerResetData &reset_data)
 {
+  mc_control::MCController::reset(reset_data);
+  
   comTask->reset();
   otTask->reset();
-  mc_control::MCController::reset(reset_data);
+  
 }
 
 void SbsController::get_values()
@@ -139,8 +153,16 @@ void SbsController::get_values()
   std::vector<std::string> activeJoints = {"LCY", "LCR", "LCP", "LKP", "LAP", "LAR", "RCY", "RCR", "RCP", "RKP", "RAP", "RAR"};
   std::vector<std::string> sensornames = {"LeftFootForceSensor", "RightFootForceSensor"};
 
-  left = realRobot().surfaceWrench("LeftFootCenter");
-  right = realRobot().surfaceWrench("RightFootCenter");
+  //left = realRobot().surfaceWrench("LeftFootCenter");
+  //right = realRobot().surfaceWrench("RightFootCenter");
+  left = robot().forceSensor("LeftFootForceSensor").worldWrench(realRobot());
+  right = robot().forceSensor("RightFootForceSensor").worldWrench(realRobot());
+
+  W_f_A = left.force();
+  W_n_A = left.moment();
+
+  W_f_B = right.force();
+  W_n_B = right.moment();
 
   world_wrench = realRobot().netWrench(sensornames);
 
@@ -149,28 +171,78 @@ void SbsController::get_values()
   // std::vector<std::vector<double> > zyc;
   // zyc=robot().q();
 
-  A_f_A = left.force();
-  A_n_A = left.moment();
+  // A_f_A = left.force();
+  // A_n_A = left.moment();
 
-  B_f_B = right.force();
-  B_n_B = right.moment();
+  // B_f_B = right.force();
+  // B_n_B = right.moment();
 
-  W_R_A = robot().surfacePose("LeftFootCenter").rotation();
-  W_p_AW = robot().surfacePose("LeftFootCenter").translation();
+  zyc_R = robot().bodyPosW("Lleg_Link5").rotation();
+  zyc_p = robot().bodyPosW("Lleg_Link5").translation();
 
-  W_p_AW_ = realRobot().surfacePose("LeftFootCenter").translation();
+  W_R_A = realRobot().surfacePose("LeftFootCenter").rotation();
+  W_p_AW = realRobot().surfacePose("LeftFootCenter").translation();
 
-  W_R_B = robot().surfacePose("RightFootCenter").rotation();
-  W_p_BW = robot().surfacePose("RightFootCenter").translation();
+  //W_p_AW_ = realRobot().surfacePose("LeftFootCenter").translation();
 
-  W_p_BW_= realRobot().surfacePose("RightFootCenter").translation();
+  W_R_B = realRobot().surfacePose("RightFootCenter").rotation();
+  W_p_BW = realRobot().surfacePose("RightFootCenter").translation();
 
-  W_p_GW = robot().com();
-  W_v_GW = robot().comVelocity();
-  W_a_GW = robot().comAcceleration();
+  //W_p_BW_= realRobot().surfacePose("RightFootCenter").translation();
 
-  W_p_GW_= realRobot().com();
+  W_p_GW = realRobot().com();
+  //W_v_GW = robot().comVelocity();
+  //W_a_GW = robot().comAcceleration();
+
+  if(first)
+    W_p_GW_p = W_p_GW;
+
+  W_v_GW = (W_p_GW - W_p_GW_p)/ timeStep;
+
+  if(first)
+    W_v_GW_p = W_v_GW;
+
+  W_a_GW = (W_v_GW - W_v_GW_p)/ timeStep;
+
+  W_p_GW_p = W_p_GW;
+  W_v_GW_p = W_v_GW;
+
+  //W_v_GW_ = realRobot().comVelocity();
+
+  //W_p_GW_= realRobot().com();
   //W_p_GW_(2) = 0.0;
+
+
+  if(W_f_A(2) > 1e-1)
+    W_Q_A << -W_n_A(1)/W_f_A(2), W_n_A(0)/W_f_A(2), .0;
+  else
+    W_Q_A = Eigen::Vector3d::Zero();
+
+  if(W_f_B(2) > 1e-1)
+    W_Q_B << -W_n_B(1)/W_f_B(2), W_n_B(0)/W_f_B(2), .0;
+  else
+    W_Q_B = Eigen::Vector3d::Zero();
+
+  W_Q = Eigen::Vector3d::Zero();
+
+  if(W_f_A(2) > 1e-1)
+  {
+    if(W_f_B(2) > 1e-1)
+    {
+      W_Q(0) = (W_f_A(2) * W_Q_A(0) + W_f_B(2) * W_Q_B(0))/(W_f_A(2) + W_f_B(2));
+      W_Q(1) = (W_f_A(2) * W_Q_A(1) + W_f_B(2) * W_Q_B(1))/(W_f_A(2) + W_f_B(2));
+    }
+    else
+    {
+      W_Q(0) = (W_f_A(2) * W_Q_A(0))/(W_f_A(2));
+      W_Q(1) = (W_f_A(2) * W_Q_A(1))/(W_f_A(2));
+    }
+  }
+  else if(W_f_B(2) > 1e-1)
+  {
+    W_Q(0) = (W_f_B(2) * W_Q_B(0))/(W_f_B(2));
+    W_Q(1) = (W_f_B(2) * W_Q_B(1))/(W_f_B(2));
+  }
 
   W_R_H = robot().bodyPosW("Body").rotation();
 
@@ -223,13 +295,13 @@ void SbsController::state_swiching()
     ctrl_mode2 = 0;
     if (fabs(A_p_QA(0)) < 0.08 && fabs(A_p_QA(1)) < 0.04)
     {
-      //ctrl_mode = 2;
-      //timer_mode = 0.0;
+      // ctrl_mode = 2;
+      // timer_mode = 0.0;
 
-      //leftFootRatio = 1.0;
+      // leftFootRatio = 1.0;
 
-      //removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
-      //solver().addTask(efTask_right);
+      // removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
+      // solver().addTask(efTask_right);
 
     }
   }
@@ -237,7 +309,7 @@ void SbsController::state_swiching()
   {
     ctrl_mode2 = 0;
     timer_mode += timeStep;
-    if ((timer_mode > 1.0) && B_f_B(2) > 1e-1)
+    if ((timer_mode > 1.0) && W_f_B(2) > 1e-1)
     {
       ctrl_mode = 0;
       solver().removeTask(efTask_right);
@@ -268,7 +340,7 @@ void SbsController::state_swiching()
   {
     ctrl_mode2 = 1;
     timer_mode += timeStep;
-    if ((timer_mode > 1.0) && A_f_A(2) > 1e-1)
+    if ((timer_mode > 1.0) && W_f_A(2) > 1e-1)
     {
       ctrl_mode = 0;
       solver().removeTask(efTask_left);
@@ -301,6 +373,8 @@ void SbsController::set_desiredVel()
   else if (ctrl_mode2 == 0)
   {
     Q_ref = W_p_AW;
+
+    Q_ref(1) = 0.06;
   }
   else if (ctrl_mode2 == 1)
   {
@@ -314,10 +388,12 @@ void SbsController::set_desiredVel()
     W_p_GW_ref = W_p_GW;
   }
 
+
   W_a_GWd = sat_func(A_LIM, COMShifter_Kp * (Q_ref - W_p_GW_ref) - COMShifter_Kd * W_v_GWd);
   W_v_GWd += W_a_GWd * timeStep;
   W_p_GW_ref += W_v_GWd * timeStep;
 
+  
   Q_epd = W_p_GW_ref - W_a_GWd / (omega * omega);
   Q_epd(2) = Q_epd(2) - HEIGHTREF;
 
