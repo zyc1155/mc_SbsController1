@@ -38,6 +38,7 @@ protected:
 
 private:
     //Falcon_Driver right_falcon, left_falcon;
+    Tra_Gen tra_gen;
     mc_rtc::Configuration config_;
     std::shared_ptr<mc_tasks::CoMTask> comTask;
     std::shared_ptr<mc_tasks::OrientationTask> otTask;
@@ -65,10 +66,6 @@ private:
     Eigen::Vector3d A_f_A, B_f_B, A_n_A, B_n_B, W_f_A, W_f_B, W_n_A, W_n_B;
 
     sva::ForceVecd left, right, world_wrench;
-
-    Eigen::Matrix3d zyc_R;
-
-    Eigen::Vector3d zyc_p;
 
     // Set 'true' to lift right foot
     bool rightFootLift_ = false;

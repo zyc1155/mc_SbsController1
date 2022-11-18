@@ -33,6 +33,8 @@ void Tra_Gen::Cal_Func(double tt)
 	{
 		for(int i=0;i<3;i++)
 			s[i]=0;
+
+		s[0] = sb;
 	}
 	else if(tt<=te)
 	{
