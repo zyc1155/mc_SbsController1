@@ -13,7 +13,7 @@ ObserverPipelines:
                                          # body positions and velocities, but we are still missing the floating base
 
   - type: BodySensor                     # - Use a BodySensor observer
-    update: true                        #   Do not update the real robot state
+    update: true                      #   Do not update the real robot state
     gui: true                         #   Do not display in the gui
     config:                              #
       bodySensor: FloatingBase           #   In simulation, the interface will fill this sensor with ground truth values
@@ -21,7 +21,7 @@ ObserverPipelines:
                                          #   by transforming the sensor measurements to the floating base frame
   
   - type: KinematicInertial              # - Estimates the floating base state using the KinematicInertial observer
-    update: false                         #   update the real robot instance from its results
+    update: false                        #   update the real robot instance from its results
     gui: false                           #   Displays the estimated velocity as an arrow (default)
     config:
       imuBodySensor: Accelerometer       # This observer only uses roll and pitch rotation information from this sensor

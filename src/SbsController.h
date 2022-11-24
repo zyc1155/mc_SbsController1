@@ -5,7 +5,7 @@
 //#include <mc_tasks/PostureTask.h>
 #include <mc_tasks/CoMTask.h>
 #include <mc_tasks/RelativeEndEffectorTask.h>
-
+#include <mc_tasks/lipm_stabilizer/StabilizerTask.h>
 
 #include "api.h"
 #include "driver.h"
@@ -43,6 +43,7 @@ private:
     std::shared_ptr<mc_tasks::CoMTask> comTask;
     std::shared_ptr<mc_tasks::OrientationTask> otTask;
     std::shared_ptr<mc_tasks::RelativeEndEffectorTask> efTask_left, efTask_right;
+    std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask> lipmTask;
 
     FILE * fp;
     bool first;
@@ -60,8 +61,8 @@ private:
     Eigen::Vector3d W_p_AW, W_p_BW, W_p_GW, W_p_BW_,W_p_GW_p, W_p_AW_ ;
     Eigen::Matrix3d R_0_mIMU;
     Eigen::Matrix3d W_R_A, W_R_B, W_R_H;
-    Eigen::Vector3d A_p_BA_ref, B_p_AB_ref, W_p_GW_ref;
-    Eigen::Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd, W_v_GW_p;
+    Eigen::Vector3d A_p_BA_ref, B_p_AB_ref, W_p_GW_ref, W_p_GWd;
+    Eigen::Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd, W_v_GW_p, W_v_GW_ref, W_a_GW_ref;
 
     Eigen::Vector3d A_f_A, B_f_B, A_n_A, B_n_B, W_f_A, W_f_B, W_n_A, W_n_B;
 
