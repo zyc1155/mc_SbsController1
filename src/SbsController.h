@@ -13,7 +13,7 @@
 
 const double GRAVITY = 9.8;
 const double HEIGHTREF=0.9;
-const double A_LIM=0.3;
+const double A_LIM=0.5;
 
 
 struct SbsController_DLLAPI SbsController : public mc_control::MCController
@@ -62,7 +62,7 @@ private:
     Eigen::Matrix3d R_0_mIMU;
     Eigen::Matrix3d W_R_A, W_R_B, W_R_H;
     Eigen::Vector3d A_p_BA_ref, B_p_AB_ref, W_p_GW_ref, W_p_GWd;
-    Eigen::Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd, W_v_GW_p, W_v_GW_ref, W_a_GW_ref;
+    Eigen::Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd, W_v_GW_p, W_v_GW_ref, W_a_GW_ref, W_a_GWdp;
 
     Eigen::Vector3d A_f_A, B_f_B, A_n_A, B_n_B, W_f_A, W_f_B, W_n_A, W_n_B;
 

@@ -23,6 +23,10 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   dof(0) = 0.0;
   dof(1) = 0.0;
   dof(5) = 0.0;
+
+  // Eigen::Vector6d dof = Eigen::Vector6d::Zero();
+  // dof(2) = 1.0;
+
   addContact({robot().name(), "ground", "LeftFoot", "AllGround", 0.7, dof});
   addContact({robot().name(), "ground", "RightFoot", "AllGround", 0.7, dof});
 
@@ -65,6 +69,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
 
+  //stabiConf.load(config);
+
   lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask>(
           solver().robots(),
           solver().realRobots(),
@@ -74,7 +80,11 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
           stabiConf.torsoBodyName,
           solver().dt()); 
 
+  lipmTask->configure(stabiConf);
+  //lipmTask->load(solver(), config);
+
   solver().addTask(lipmTask);
+  
 
   ttime = 0;
 
@@ -89,7 +99,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   for (int i = 0; i < 3; i++)
   {
-    COMShifter_Kp(i, i) = 20.0;
+    COMShifter_Kp(i, i) = 30.0;
 
     COMShifter_Kd(i, i) = COMShifter_Kp(i, i) / omega + omega;
   }
@@ -114,10 +124,16 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   logger().addLogEntries(
       this,
+      "leftFootRatio", [this]()
+      { return leftFootRatio; },
       "left_foot_center", [this]()
       { return W_p_AW; },
       "right_foot_center", [this]()
       { return W_p_BW; },
+      "left_foot_a", [this]()
+      { return W_p_AW_; },
+      "right_foot_a", [this]()
+      { return W_p_BW_; },
       "ref_COM", [this]()
       { return W_p_GW_ref; },
       "real_COM_p", [this]()
@@ -155,10 +171,6 @@ bool SbsController::run()
   set_desiredVel();
   set_desiredTask();
   // output_data();
-  if (rightFootLift_)
-  {
-    ttime += timeStep;
-  }
 
   if (first)
     first = false;
@@ -211,12 +223,12 @@ void SbsController::get_values()
   W_R_A = realRobot().surfacePose("LeftFootCenter").rotation();
   W_p_AW = realRobot().surfacePose("LeftFootCenter").translation();
 
-  // W_p_AW_ = realRobot().surfacePose("LeftFootCenter").translation();
+  W_p_AW_ = realRobot().surfacePose("LeftFoot").translation();
 
   W_R_B = realRobot().surfacePose("RightFootCenter").rotation();
   W_p_BW = realRobot().surfacePose("RightFootCenter").translation();
 
-  // W_p_BW_= realRobot().surfacePose("RightFootCenter").translation();
+  W_p_BW_= realRobot().surfacePose("RightFoot").translation();
 
   W_p_GW = realRobot().com();
   // W_v_GW = robot().comVelocity();
@@ -332,9 +344,6 @@ void SbsController::state_swiching()
     timer_mode += timeStep;
     timer_mode = 0.0;
 
-    // if(leftFootRatio < 1.0)
-    //   leftFootRatio += 0.01;
-
     if ((timer_mode > 1.0) && B_f_B(2) > 1e-1)
     {
       ctrl_mode = 0;
@@ -389,6 +398,7 @@ void SbsController::state_swiching()
 
 void SbsController::set_desiredVel()
 {
+  Eigen::Vector3d jerk;
   if (ctrl_mode == 0)
   {
     Q_ref = (W_p_AW + W_p_BW) / 2.0;
@@ -412,19 +422,24 @@ void SbsController::set_desiredVel()
   {
     W_p_GW_ref = W_p_GW;
     W_p_GWd = W_p_GW_ref;
+    W_a_GWdp = Eigen::Vector3d::Zero();
   }
 
   W_a_GW_ref = sat_func(A_LIM, COMShifter_Kp * (Q_ref - W_p_GW_ref) - COMShifter_Kd * W_v_GW_ref);
+  jerk = sat_func(10.0, (W_a_GW_ref - W_a_GWdp)/timeStep);
+  W_a_GW_ref = W_a_GWdp + jerk * timeStep;
+  W_a_GWdp = W_a_GW_ref;
+
   W_v_GW_ref += W_a_GW_ref * timeStep;
   W_p_GW_ref += W_v_GW_ref * timeStep;
 
-  double zyc_kp = 10.0;
+  // double zyc_kp = 10.0;
 
-  W_a_GWd = zyc_kp * (W_p_GW_ref - W_p_GW) + 2* 0.6 * sqrt(zyc_kp) * (W_v_GW_ref - W_v_GW);
-  W_v_GWd += W_a_GWd * timeStep;
-  W_p_GWd += W_v_GWd * timeStep;
+  // W_a_GWd = zyc_kp * (W_p_GW_ref - W_p_GW) + 2* 0.6 * sqrt(zyc_kp) * (W_v_GW_ref - W_v_GW);
+  // W_v_GWd += W_a_GWd * timeStep;
+  // W_p_GWd += W_v_GWd * timeStep;
 
-  Q_epd = W_p_GW_ref - W_a_GW_ref / (omega * omega);
+  Q_epd = W_p_GW_ref - W_a_GW_ref/ (omega * omega);
   Q_epd(2) = Q_epd(2) - HEIGHTREF;
 
   if ((ctrl_mode == 0 || ctrl_mode == 1 || ctrl_mode == 5))
@@ -459,8 +474,8 @@ void SbsController::set_desiredTask()
   // comTask->refAccel(W_a_GW_ref);
   // comTask->refVel(W_v_GW_ref);
   // comTask->com(W_p_GW_ref);
-
-  lipmTask->target(W_p_GW_ref, W_v_GW_ref, W_a_GW_ref,Q_epd) ;
+  leftFootRatio = lipmTask->leftFootRatio();
+  lipmTask->target(W_p_GW_ref, W_v_GW_ref, W_a_GW_ref,Q_epd);
 
   otTask->orientation(Eigen::Matrix3d::Identity());
 
