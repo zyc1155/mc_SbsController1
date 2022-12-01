@@ -37,7 +37,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   otTask->orientation(Eigen::Matrix3d::Identity());
 
-  postureTask->stiffness(50.0);
+  postureTask->stiffness(100.0);
   postureTask->weight(1.0);
 
   std::vector<tasks::qp::JointStiffness> stiffnesses;
@@ -54,8 +54,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   postureTask->dimWeight(ww);
 
-  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5", 20.0, 1.0);
-  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5", 20.0, 1.0);
+  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5", 50.0, 1.0);
+  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5", 50.0, 1.0);
 
   // efTask_left->positionTask->stiffness(10.0);
   // efTask_left->orientationTask->stiffness(10.0);
@@ -69,7 +69,6 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
 
-  //stabiConf.load(config);
 
   lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask>(
           solver().robots(),
@@ -81,9 +80,9 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
           solver().dt()); 
 
   lipmTask->configure(stabiConf);
-  //lipmTask->load(solver(), config);
 
   solver().addTask(lipmTask);
+  
   
 
   ttime = 0;
@@ -115,10 +114,6 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
                                                   robot.surfacePose("LeftFoot"),
                                                   leftFootRatio);
                         });
-
-  gui()->addElement({"a"},
-                    mc_rtc::gui::Point3D("ZMP", [this]()
-                                         { return W_Q; }));
 
   createGUI();
 
@@ -326,16 +321,17 @@ void SbsController::state_swiching()
   if (ctrl_mode == 1)
   {
     Eigen::Vector3d A_p_QA;
-    A_p_QA = W_R_A.transpose() * (Q_ep - W_p_AW);
+    A_p_QA = W_R_A.transpose() * (W_Q_W - W_p_AW);
     ctrl_mode2 = 0;
 
-    if (fabs(A_p_QA(0)) < 0.08 && fabs(A_p_QA(1)) < 0.04)//0.04
+    if (fabs(A_p_QA(0)) < 0.01 && fabs(A_p_QA(1)) < 0.01)//0.04
     {
-      // ctrl_mode = 2;
-      // timer_mode = 0.0;
-
-      // removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
-      // solver().addTask(efTask_right);
+      ctrl_mode = 2;
+      timer_mode = 0.0;
+      
+      removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
+      solver().addTask(efTask_right);
+      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
     }
   }
   else if (ctrl_mode == 2)
@@ -349,8 +345,6 @@ void SbsController::state_swiching()
       ctrl_mode = 0;
       solver().removeTask(efTask_right);
       addContact({robot().name(), "ground", "RightFoot", "AllGround"});
-
-      leftFootRatio = 0.5;
     }
   }
   else if (ctrl_mode == 5)
@@ -362,8 +356,6 @@ void SbsController::state_swiching()
     {
       ctrl_mode = 6;
       timer_mode = 0.0;
-
-      leftFootRatio = 0.0;
 
       removeContact({robot().name(), "ground", "LeftFoot", "AllGround"});
       solver().addTask(efTask_left);
@@ -378,8 +370,6 @@ void SbsController::state_swiching()
       ctrl_mode = 0;
       solver().removeTask(efTask_left);
       addContact({robot().name(), "ground", "LeftFoot", "AllGround"});
-
-      leftFootRatio = 0.5;
     }
   }
   else if ((ctrl_mode == 0 && vel_posRB(2) > 0.1 && posRB(2) > 0.0))
@@ -407,7 +397,7 @@ void SbsController::set_desiredVel()
   {
     Q_ref = W_p_AW;
 
-    Q_ref(1) = 0.085;
+    //Q_ref(1) = 0.085;
   }
   else if (ctrl_mode2 == 1)
   {
@@ -493,7 +483,7 @@ void SbsController::set_desiredTask()
   }
   else if (ctrl_mode2 == 0)
   {
-    //efTask_right->set_ef_pose(sva::PTransformd(A_p_BA_ref));
+    efTask_right->set_ef_pose(sva::PTransformd(A_p_BA_ref));
 
     // otTask->orientation(W_R_H);
   }
