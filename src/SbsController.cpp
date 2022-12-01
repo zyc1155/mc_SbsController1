@@ -68,6 +68,16 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   efTask_right->orientationTask->dimWeight(Eigen::MatrixXd::Constant(3, 1, 1000.0));
 
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
+  stabiConf.comHeight = 0.9;
+  stabiConf.torsoPitch = 0;
+  stabiConf.copAdmittance = Eigen::Vector2d{0.008, 0.008};
+  stabiConf.zmpcc.comAdmittance = Eigen::Vector2d{0.0, 0.0};
+  stabiConf.dcmPropGain = 2.0; //4.0;
+  stabiConf.dcmIntegralGain = 10;
+  stabiConf.dcmDerivGain = 0.5;
+  stabiConf.dcmDerivatorTimeConstant = 5;
+  stabiConf.dcmIntegratorTimeConstant = 15;
+  
 
 
   lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask>(
