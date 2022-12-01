@@ -321,7 +321,7 @@ void SbsController::state_swiching()
   if (ctrl_mode == 1)
   {
     Eigen::Vector3d A_p_QA;
-    A_p_QA = W_R_A.transpose() * (W_Q_W - W_p_AW);
+    A_p_QA = W_R_A.transpose() * (Q_epd - W_p_AW);
     ctrl_mode2 = 0;
 
     if (fabs(A_p_QA(0)) < 0.01 && fabs(A_p_QA(1)) < 0.01)//0.04
@@ -345,6 +345,8 @@ void SbsController::state_swiching()
       ctrl_mode = 0;
       solver().removeTask(efTask_right);
       addContact({robot().name(), "ground", "RightFoot", "AllGround"});
+      Q_ref = (W_p_AW + W_p_BW) / 2.0;
+      Q_ref(2) += HEIGHTREF;
     }
   }
   else if (ctrl_mode == 5)
@@ -370,6 +372,8 @@ void SbsController::state_swiching()
       ctrl_mode = 0;
       solver().removeTask(efTask_left);
       addContact({robot().name(), "ground", "LeftFoot", "AllGround"});
+      Q_ref = (W_p_AW + W_p_BW) / 2.0;
+      Q_ref(2) += HEIGHTREF;
     }
   }
   else if ((ctrl_mode == 0 && vel_posRB(2) > 0.1 && posRB(2) > 0.0))
@@ -377,39 +381,27 @@ void SbsController::state_swiching()
     ctrl_mode2 = 0;
 
     ctrl_mode = 1;
+    Q_ref = W_p_AW;
+    Q_ref(2) += HEIGHTREF;
   }
   else if ((ctrl_mode == 0 && vel_posRA(2) > 0.1 && posRA(2) > 0.0))
   {
     ctrl_mode2 = 1;
 
     ctrl_mode = 5;
+    Q_ref = W_p_BW;
+    Q_ref(2) += HEIGHTREF;
   }
 }
 
 void SbsController::set_desiredVel()
 {
   Eigen::Vector3d jerk;
-  if (ctrl_mode == 0)
-  {
-    Q_ref = (W_p_AW + W_p_BW) / 2.0;
-  }
-  else if (ctrl_mode2 == 0)
-  {
-    Q_ref = W_p_AW;
-
-    //Q_ref(1) = 0.085;
-  }
-  else if (ctrl_mode2 == 1)
-  {
-    Q_ref = W_p_BW;
-  }
-
-  Q_ref(2) += HEIGHTREF;
-
-  //Q_ref << 0.0, -0.105, 0.9;
 
   if (first)
   {
+    Q_ref = (W_p_AW + W_p_BW) / 2.0;
+    Q_ref(2) += HEIGHTREF;
     W_p_GW_ref = W_p_GW;
     W_p_GWd = W_p_GW_ref;
     W_a_GWdp = Eigen::Vector3d::Zero();
@@ -438,7 +430,7 @@ void SbsController::set_desiredVel()
   else if (ctrl_mode2 == 0)
   {
     A_p_BA_ref(0) = posRB(0) * 10.0;
-    A_p_BA_ref(1) = -0.18 + posRB(1) * 5.0;
+    A_p_BA_ref(1) = -0.21 + posRB(1) * 5.0;
     A_p_BA_ref(2) = posRB(2) * 8.0;
 
 
@@ -446,7 +438,7 @@ void SbsController::set_desiredVel()
   else if (ctrl_mode2 == 1)
   {
     B_p_AB_ref(0) = posRA(0) * 10.0;
-    B_p_AB_ref(1) = 0.18 + posRA(1) * 5.0;
+    B_p_AB_ref(1) = 0.21 + posRA(1) * 5.0;
     B_p_AB_ref(2) = posRA(2) * 8.0;
   }
 }
