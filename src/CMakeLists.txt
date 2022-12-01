@@ -1,13 +1,11 @@
 set(controller_SRC
   SbsController.cpp
   driver.cpp
-  Tra_Gen.cpp
 )
 
 set(controller_HDR
   SbsController.h
   driver.h
-  Tra_Gen.h
 )
 
 add_controller(${PROJECT_NAME} ${controller_SRC} ${controller_HDR})

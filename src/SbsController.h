@@ -9,11 +9,10 @@
 
 #include "api.h"
 #include "driver.h"
-#include "Tra_Gen.h"
 
 const double GRAVITY = 9.8;
 const double HEIGHTREF=0.9;
-const double A_LIM=0.5;
+const double A_LIM=0.45;
 
 
 struct SbsController_DLLAPI SbsController : public mc_control::MCController
@@ -37,8 +36,7 @@ protected:
   void createGUI();
 
 private:
-    //Falcon_Driver right_falcon, left_falcon;
-    Tra_Gen tra_gen;
+    Falcon_Driver right_falcon, left_falcon;
     mc_rtc::Configuration config_;
     std::shared_ptr<mc_tasks::CoMTask> comTask;
     std::shared_ptr<mc_tasks::OrientationTask> otTask;

@@ -1,7 +1,7 @@
 #include "SbsController.h"
 
 SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rtc::Configuration &config)
-    : mc_control::MCController(rm, dt), tra_gen(5, 0, 0.06) //, right_falcon(0), left_falcon(1)
+    : mc_control::MCController(rm, dt), right_falcon(0), left_falcon(1)
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
@@ -70,13 +70,13 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
   stabiConf.comHeight = 0.9;
   stabiConf.torsoPitch = 0;
-  stabiConf.copAdmittance = Eigen::Vector2d{0.008, 0.008};
+  stabiConf.copAdmittance = Eigen::Vector2d{0.005, 0.005};
   stabiConf.zmpcc.comAdmittance = Eigen::Vector2d{0.0, 0.0};
   stabiConf.dcmPropGain = 2.0; //4.0;
   stabiConf.dcmIntegralGain = 10;
   stabiConf.dcmDerivGain = 0.5;
   stabiConf.dcmDerivatorTimeConstant = 5;
-  stabiConf.dcmIntegratorTimeConstant = 15;
+  stabiConf.dcmIntegratorTimeConstant = 5;
   
 
 
@@ -125,7 +125,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
                                                   leftFootRatio);
                         });
 
-  createGUI();
+  //createGUI();
 
   logger().addLogEntries(
       this,
@@ -299,13 +299,11 @@ void SbsController::get_values()
 void SbsController::set_CtrlPos()
 {
 
-  // posRB_ = right_falcon.Get_Pos();
-  // posRA_ = left_falcon.Get_Pos();
+  posRB_ = right_falcon.Get_Pos();
+  posRA_ = left_falcon.Get_Pos();
 
-  // posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
-  // posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
-  posRB << 0, 0, 0;
-  posRA << 0, 0, 0;
+  posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
+  posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
 
 
   if (rightFootLift_)
@@ -348,13 +346,13 @@ void SbsController::state_swiching()
   {
     ctrl_mode2 = 0;
     timer_mode += timeStep;
-    timer_mode = 0.0;
 
-    if ((timer_mode > 1.0) && B_f_B(2) > 1e-1)
+    if ((timer_mode > 1.0) && B_f_B(2) > 5.0)
     {
       ctrl_mode = 0;
       solver().removeTask(efTask_right);
       addContact({robot().name(), "ground", "RightFoot", "AllGround"});
+      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
     }
@@ -362,31 +360,33 @@ void SbsController::state_swiching()
   else if (ctrl_mode == 5)
   {
     Eigen::Vector3d B_p_QB;
-    B_p_QB = W_R_B.transpose() * (Q_ep - W_p_BW);
+    B_p_QB = W_R_B.transpose() * (Q_epd - W_p_BW);
     ctrl_mode2 = 1;
-    if (fabs(B_p_QB(0)) < 0.08 && fabs(B_p_QB(1)) < 0.04)
+    if (fabs(B_p_QB(0)) < 0.01 && fabs(B_p_QB(1)) < 0.01)
     {
       ctrl_mode = 6;
       timer_mode = 0.0;
 
       removeContact({robot().name(), "ground", "LeftFoot", "AllGround"});
       solver().addTask(efTask_left);
+      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Right});
     }
   }
   else if (ctrl_mode == 6)
   {
     ctrl_mode2 = 1;
     timer_mode += timeStep;
-    if ((timer_mode > 0.1) && A_f_A(2) > 1e-1)
+    if ((timer_mode > 1.0) && A_f_A(2) > 5.0)
     {
       ctrl_mode = 0;
       solver().removeTask(efTask_left);
       addContact({robot().name(), "ground", "LeftFoot", "AllGround"});
+      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
     }
   }
-  else if ((ctrl_mode == 0 && vel_posRB(2) > 0.1 && posRB(2) > 0.0))
+  else if ((ctrl_mode == 0 && vel_posRB(2) > 0.05 && posRB(2) > 0.0))
   {
     ctrl_mode2 = 0;
 
@@ -394,7 +394,7 @@ void SbsController::state_swiching()
     Q_ref = W_p_AW;
     Q_ref(2) += HEIGHTREF;
   }
-  else if ((ctrl_mode == 0 && vel_posRA(2) > 0.1 && posRA(2) > 0.0))
+  else if ((ctrl_mode == 0 && vel_posRA(2) > 0.05 && posRA(2) > 0.0))
   {
     ctrl_mode2 = 1;
 
