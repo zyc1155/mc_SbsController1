@@ -30,7 +30,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   addContact({robot().name(), "ground", "LeftFoot", "AllGround", 0.7, dof});
   addContact({robot().name(), "ground", "RightFoot", "AllGround", 0.7, dof});
 
-  otTask = std::make_shared<mc_tasks::OrientationTask>("Body", robots(), 0, 100.0, 1.0);
+  otTask = std::make_shared<mc_tasks::OrientationTask>("Chest_Link2", robots(), 0, 100.0, 1.0);
 
   otTask->dimWeight(Eigen::MatrixXd::Constant(3, 1, 1000.0));
   solver().addTask(otTask);
@@ -73,7 +73,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   stabiConf.copAdmittance = Eigen::Vector2d{0.005, 0.005};
   stabiConf.zmpcc.comAdmittance = Eigen::Vector2d{0.0, 0.0};
   stabiConf.dcmPropGain = 2.0; //4.0;
-  stabiConf.dcmIntegralGain = 10;
+  stabiConf.dcmIntegralGain = 15;
   stabiConf.dcmDerivGain = 0.5;
   stabiConf.dcmDerivatorTimeConstant = 5;
   stabiConf.dcmIntegratorTimeConstant = 5;
@@ -304,7 +304,8 @@ void SbsController::set_CtrlPos()
 
   posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
   posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
-
+  // posRB << .0,.0,.0;
+  // posRA << .0,.0,.0;
 
   if (rightFootLift_)
   {
@@ -418,7 +419,7 @@ void SbsController::set_desiredVel()
   }
 
   W_a_GW_ref = sat_func(A_LIM, COMShifter_Kp * (Q_ref - W_p_GW_ref) - COMShifter_Kd * W_v_GW_ref);
-  jerk = sat_func(10.0, (W_a_GW_ref - W_a_GWdp)/timeStep);
+  jerk = sat_func(8.0, (W_a_GW_ref - W_a_GWdp)/timeStep);
   W_a_GW_ref = W_a_GWdp + jerk * timeStep;
   W_a_GWdp = W_a_GW_ref;
 

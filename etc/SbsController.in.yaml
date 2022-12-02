@@ -13,7 +13,7 @@ ObserverPipelines:
                                          # body positions and velocities, but we are still missing the floating base
 
   - type: BodySensor                     # - Use a BodySensor observer
-    update: false                        #   Do not update the real robot state
+    update: false                       #   Do not update the real robot state
     gui: false                           #   Do not display in the gui
     config:                              #
       bodySensor: FloatingBase           #   In simulation, the interface will fill this sensor with ground truth values
