@@ -1,7 +1,7 @@
 #include "SbsController.h"
 
 SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rtc::Configuration &config)
-    : mc_control::MCController(rm, dt), right_falcon(0), left_falcon(1)
+    : mc_control::MCController(rm, dt), right_falcon(1), left_falcon(0)
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
@@ -12,10 +12,6 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   solver().addTask(postureTask);
 
   std::vector<std::string> activeJoints = {"RCY", "RCR", "RCP", "RKP", "RAP", "RAR", "LCY", "LCR", "LCP", "LKP", "LAP", "LAR"};
-  //comTask.reset(new mc_tasks::CoMTask(robots(), robots().robotIndex()));
-  //comTask = std::make_shared<mc_tasks::CoMTask>(robots(), 0, 100.0, 1000.0);
-
-  //solver().addTask(comTask);
 
   solver().setContacts({{}});
 
@@ -27,10 +23,14 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   // Eigen::Vector6d dof = Eigen::Vector6d::Zero();
   // dof(2) = 1.0;
 
-  addContact({robot().name(), "ground", "LeftFoot", "AllGround", 0.7, dof});
-  addContact({robot().name(), "ground", "RightFoot", "AllGround", 0.7, dof});
+  addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
+  addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
 
-  otTask = std::make_shared<mc_tasks::OrientationTask>("Chest_Link2", robots(), 0, 100.0, 1.0);
+  comTask = std::make_shared<mc_tasks::CoMTask>(robots(), 0, 100.0, 1000.0);
+
+  solver().addTask(comTask);
+
+  otTask = std::make_shared<mc_tasks::OrientationTask>("Body", robots(), 0, 100.0, 1.0); //"Chest_Link2"
 
   otTask->dimWeight(Eigen::MatrixXd::Constant(3, 1, 1000.0));
   solver().addTask(otTask);
@@ -54,8 +54,9 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   postureTask->dimWeight(ww);
 
-  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5", 50.0, 1.0);
-  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5", 50.0, 1.0);
+
+  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5", 10.0, 1.0);
+  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5", 10.0, 1.0);
 
   // efTask_left->positionTask->stiffness(10.0);
   // efTask_left->orientationTask->stiffness(10.0);
@@ -70,13 +71,13 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
   stabiConf.comHeight = 0.9;
   stabiConf.torsoPitch = 0;
-  stabiConf.copAdmittance = Eigen::Vector2d{0.005, 0.005};
+  stabiConf.copAdmittance = Eigen::Vector2d{0.008, 0.008};//0.008, 0.008
   stabiConf.zmpcc.comAdmittance = Eigen::Vector2d{0.0, 0.0};
-  stabiConf.dcmPropGain = 2.0; //4.0;
+  stabiConf.dcmPropGain = 2.0; //2.0;
   stabiConf.dcmIntegralGain = 15;
   stabiConf.dcmDerivGain = 0.5;
   stabiConf.dcmDerivatorTimeConstant = 5;
-  stabiConf.dcmIntegratorTimeConstant = 5;
+  stabiConf.dcmIntegratorTimeConstant = 5; //5.0
   
 
 
@@ -168,8 +169,7 @@ bool SbsController::run()
   {
     z_start = std::chrono::high_resolution_clock::now();
   }
-  // ttime = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - z_start).count();
-
+  ttime = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - z_start).count();
   get_values();
   set_CtrlPos();
   state_swiching();
@@ -187,7 +187,7 @@ void SbsController::reset(const mc_control::ControllerResetData &reset_data)
 {
   mc_control::MCController::reset(reset_data);
 
-  //comTask->reset();
+  comTask->reset();
   otTask->reset();
   lipmTask->reset();
 }
@@ -327,6 +327,10 @@ void SbsController::set_CtrlPos()
 
 void SbsController::state_swiching()
 {
+  Eigen::Vector6d dof = Eigen::Vector6d::Ones();
+  dof(0) = 0.0;
+  dof(1) = 0.0;
+  dof(5) = 0.0; 
   if (ctrl_mode == 1)
   {
     Eigen::Vector3d A_p_QA;
@@ -352,7 +356,7 @@ void SbsController::state_swiching()
     {
       ctrl_mode = 0;
       solver().removeTask(efTask_right);
-      addContact({robot().name(), "ground", "RightFoot", "AllGround"});
+      addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
@@ -381,13 +385,13 @@ void SbsController::state_swiching()
     {
       ctrl_mode = 0;
       solver().removeTask(efTask_left);
-      addContact({robot().name(), "ground", "LeftFoot", "AllGround"});
+      addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
     }
   }
-  else if ((ctrl_mode == 0 && vel_posRB(2) > 0.05 && posRB(2) > 0.0))
+  else if ((ctrl_mode == 0 && vel_posRB(2) > 0.05 && posRB(2) > W_p_BW(2)))
   {
     ctrl_mode2 = 0;
 
@@ -395,7 +399,7 @@ void SbsController::state_swiching()
     Q_ref = W_p_AW;
     Q_ref(2) += HEIGHTREF;
   }
-  else if ((ctrl_mode == 0 && vel_posRA(2) > 0.05 && posRA(2) > 0.0))
+  else if ((ctrl_mode == 0 && vel_posRA(2) > 0.05 && posRA(2) > W_p_AW(2)))
   {
     ctrl_mode2 = 1;
 
@@ -464,9 +468,9 @@ void SbsController::set_desiredTask()
   // W_v_GWd(1) = tra_gen.s[1];
   // W_p_GW_ref(1) = tra_gen.s[0];
 
-  // comTask->refAccel(W_a_GW_ref);
-  // comTask->refVel(W_v_GW_ref);
-  // comTask->com(W_p_GW_ref);
+  comTask->refAccel(W_a_GW_ref);
+  comTask->refVel(W_v_GW_ref);
+  comTask->com(W_p_GW_ref);
   leftFootRatio = lipmTask->leftFootRatio();
   lipmTask->target(W_p_GW_ref, W_v_GW_ref, W_a_GW_ref,Q_epd);
 

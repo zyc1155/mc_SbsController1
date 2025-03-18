@@ -71,7 +71,7 @@ Falcon_Driver::Falcon_Driver(int NoFalcon)
 
 	m_falconDevice.getFalconFirmware()->setHomingMode(true); // Set homing mode (keep track of encoders !needed!)
 	// mc_rtc::log::info("Homing Set");
-	std::array<int, 3> forces;
+	std::array<int, 3> forces = {0, 0, 0};
 	m_falconDevice.getFalconFirmware()->setForces(forces);
 	m_falconDevice.runIOLoop(); // read in data
 	{
