@@ -1,7 +1,7 @@
 #include "SbsController.h"
 
 SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rtc::Configuration &config)
-    : mc_control::MCController(rm, dt), right_falcon(1), left_falcon(0)
+    : mc_control::MCController(rm, dt), right_falcon(0), left_falcon(1)
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
@@ -15,27 +15,23 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   solver().setContacts({{}});
 
-  Eigen::Vector6d dof = Eigen::Vector6d::Ones();
+  Vector6d dof = Vector6d::Ones();
   dof(0) = 0.0;
   dof(1) = 0.0;
   dof(5) = 0.0;
 
-  // Eigen::Vector6d dof = Eigen::Vector6d::Zero();
+  //  Vector6d dof =  Vector6d::Zero();
   // dof(2) = 1.0;
 
   addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
   addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
 
-  comTask = std::make_shared<mc_tasks::CoMTask>(robots(), 0, 100.0, 1000.0);
-
-  solver().addTask(comTask);
-
   otTask = std::make_shared<mc_tasks::OrientationTask>("Body", robots(), 0, 100.0, 1.0); //"Chest_Link2"
 
-  otTask->dimWeight(Eigen::MatrixXd::Constant(3, 1, 1000.0));
+  otTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
   solver().addTask(otTask);
 
-  otTask->orientation(Eigen::Matrix3d::Identity());
+  otTask->orientation(Matrix3d::Identity());
 
   postureTask->stiffness(100.0);
   postureTask->weight(1.0);
@@ -48,64 +44,59 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   }
   postureTask->jointStiffness(solver(), stiffnesses);
 
-  Eigen::VectorXd ww(59);
-  ww.head(18) = Eigen::MatrixXd::Constant(18, 1, 1.0);
-  ww.tail(41) = Eigen::MatrixXd::Constant(41, 1, 1000.0);
+  VectorXd ww(59);
+  ww.head(18) = MatrixXd::Constant(18, 1, 1.0);
+  ww.tail(41) = MatrixXd::Constant(41, 1, 1000.0);
 
   postureTask->dimWeight(ww);
-
 
   efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5", 10.0, 1.0);
   efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5", 10.0, 1.0);
 
   // efTask_left->positionTask->stiffness(10.0);
   // efTask_left->orientationTask->stiffness(10.0);
-  efTask_left->positionTask->dimWeight(Eigen::MatrixXd::Constant(3, 1, 1000.0));
-  efTask_left->orientationTask->dimWeight(Eigen::MatrixXd::Constant(3, 1, 1000.0));
+  efTask_left->positionTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
+  efTask_left->orientationTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
 
   // efTask_right->positionTask->stiffness(10.0);
   // efTask_right->orientationTask->stiffness(10.0);
-  efTask_right->positionTask->dimWeight(Eigen::MatrixXd::Constant(3, 1, 1000.0));
-  efTask_right->orientationTask->dimWeight(Eigen::MatrixXd::Constant(3, 1, 1000.0));
+  efTask_right->positionTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
+  efTask_right->orientationTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
 
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
-  stabiConf.comHeight = 0.9;
+  stabiConf.comHeight = HEIGHTREF;
   stabiConf.torsoPitch = 0;
-  stabiConf.copAdmittance = Eigen::Vector2d{0.008, 0.008};//0.008, 0.008
-  stabiConf.zmpcc.comAdmittance = Eigen::Vector2d{0.0, 0.0};
-  stabiConf.dcmPropGain = 2.0; //2.0;
+  stabiConf.copAdmittance = Vector2d{0.008, 0.008}; // 0.008, 0.008
+  stabiConf.zmpcc.comAdmittance = Vector2d{0.0, 0.0};
+  stabiConf.dcmPropGain = 2.0; // 2.0;
   stabiConf.dcmIntegralGain = 15;
   stabiConf.dcmDerivGain = 0.5;
   stabiConf.dcmDerivatorTimeConstant = 5;
-  stabiConf.dcmIntegratorTimeConstant = 5; //5.0
-  
-
+  stabiConf.dcmIntegratorTimeConstant = 5; // 5.0
 
   lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask>(
-          solver().robots(),
-          solver().realRobots(),
-          0,
-          stabiConf.leftFootSurface,
-          stabiConf.rightFootSurface,
-          stabiConf.torsoBodyName,
-          solver().dt()); 
+      solver().robots(),
+      solver().realRobots(),
+      0,
+      stabiConf.leftFootSurface,
+      stabiConf.rightFootSurface,
+      stabiConf.torsoBodyName,
+      solver().dt());
 
   lipmTask->configure(stabiConf);
 
   solver().addTask(lipmTask);
-  
-  
 
   ttime = 0;
 
   ctrl_mode = 0;
   ctrl_mode2 = 0;
-  W_v_GW_ref = Eigen::Vector3d::Zero();
-  W_v_GWd = Eigen::Vector3d::Zero();
-  Q_epd = Eigen::Vector3d::Zero();
+  W_v_GW_ref = Vector3d::Zero();
+  W_v_GWd = Vector3d::Zero();
+  Q_epd = Vector3d::Zero();
   omega = sqrt(GRAVITY / HEIGHTREF);
-  COMShifter_Kp = Eigen::Matrix3d::Zero();
-  COMShifter_Kd = Eigen::Matrix3d::Zero();
+  COMShifter_Kp = Matrix3d::Zero();
+  COMShifter_Kd = Matrix3d::Zero();
 
   for (int i = 0; i < 3; i++)
   {
@@ -126,7 +117,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
                                                   leftFootRatio);
                         });
 
-  //createGUI();
+  // createGUI();
 
   logger().addLogEntries(
       this,
@@ -187,14 +178,13 @@ void SbsController::reset(const mc_control::ControllerResetData &reset_data)
 {
   mc_control::MCController::reset(reset_data);
 
-  comTask->reset();
   otTask->reset();
   lipmTask->reset();
 }
 
 void SbsController::get_values()
 {
-  sva::PTransformd ZMP_frame(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+  sva::PTransformd ZMP_frame(Matrix3d::Identity(), Vector3d::Zero());
   std::vector<std::string> activeJoints = {"LCY", "LCR", "LCP", "LKP", "LAP", "LAR", "RCY", "RCR", "RCP", "RKP", "RAP", "RAR"};
   std::vector<std::string> sensornames = {"LeftFootForceSensor", "RightFootForceSensor"};
 
@@ -233,7 +223,7 @@ void SbsController::get_values()
   W_R_B = realRobot().surfacePose("RightFootCenter").rotation();
   W_p_BW = realRobot().surfacePose("RightFootCenter").translation();
 
-  W_p_BW_= realRobot().surfacePose("RightFoot").translation();
+  W_p_BW_ = realRobot().surfacePose("RightFoot").translation();
 
   W_p_GW = realRobot().com();
   // W_v_GW = robot().comVelocity();
@@ -260,14 +250,14 @@ void SbsController::get_values()
   if (W_f_A(2) > 1e-1)
     W_Q_A << -W_n_A(1) / W_f_A(2), W_n_A(0) / W_f_A(2), .0;
   else
-    W_Q_A = Eigen::Vector3d::Zero();
+    W_Q_A = Vector3d::Zero();
 
   if (W_f_B(2) > 1e-1)
     W_Q_B << -W_n_B(1) / W_f_B(2), W_n_B(0) / W_f_B(2), .0;
   else
-    W_Q_B = Eigen::Vector3d::Zero();
+    W_Q_B = Vector3d::Zero();
 
-  W_Q = Eigen::Vector3d::Zero();
+  W_Q = Vector3d::Zero();
 
   if (W_f_A(2) > 1e-1)
   {
@@ -327,21 +317,21 @@ void SbsController::set_CtrlPos()
 
 void SbsController::state_swiching()
 {
-  Eigen::Vector6d dof = Eigen::Vector6d::Ones();
+  Vector6d dof = Vector6d::Ones();
   dof(0) = 0.0;
   dof(1) = 0.0;
-  dof(5) = 0.0; 
+  dof(5) = 0.0;
   if (ctrl_mode == 1)
   {
-    Eigen::Vector3d A_p_QA;
+    Vector3d A_p_QA;
     A_p_QA = W_R_A.transpose() * (Q_epd - W_p_AW);
     ctrl_mode2 = 0;
 
-    if (fabs(A_p_QA(0)) < 0.01 && fabs(A_p_QA(1)) < 0.01)//0.04
+    if (fabs(A_p_QA(0)) < 0.01 && fabs(A_p_QA(1)) < 0.01) // 0.04
     {
       ctrl_mode = 2;
       timer_mode = 0.0;
-      
+
       removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
       solver().addTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
@@ -364,7 +354,7 @@ void SbsController::state_swiching()
   }
   else if (ctrl_mode == 5)
   {
-    Eigen::Vector3d B_p_QB;
+    Vector3d B_p_QB;
     B_p_QB = W_R_B.transpose() * (Q_epd - W_p_BW);
     ctrl_mode2 = 1;
     if (fabs(B_p_QB(0)) < 0.01 && fabs(B_p_QB(1)) < 0.01)
@@ -411,7 +401,7 @@ void SbsController::state_swiching()
 
 void SbsController::set_desiredVel()
 {
-  Eigen::Vector3d jerk;
+  Vector3d jerk;
 
   if (first)
   {
@@ -419,11 +409,11 @@ void SbsController::set_desiredVel()
     Q_ref(2) += HEIGHTREF;
     W_p_GW_ref = W_p_GW;
     W_p_GWd = W_p_GW_ref;
-    W_a_GWdp = Eigen::Vector3d::Zero();
+    W_a_GWdp = Vector3d::Zero();
   }
 
   W_a_GW_ref = sat_func(A_LIM, COMShifter_Kp * (Q_ref - W_p_GW_ref) - COMShifter_Kd * W_v_GW_ref);
-  jerk = sat_func(8.0, (W_a_GW_ref - W_a_GWdp)/timeStep);
+  jerk = sat_func(8.0, (W_a_GW_ref - W_a_GWdp) / timeStep);
   W_a_GW_ref = W_a_GWdp + jerk * timeStep;
   W_a_GWdp = W_a_GW_ref;
 
@@ -436,7 +426,7 @@ void SbsController::set_desiredVel()
   // W_v_GWd += W_a_GWd * timeStep;
   // W_p_GWd += W_v_GWd * timeStep;
 
-  Q_epd = W_p_GW_ref - W_a_GW_ref/ (omega * omega);
+  Q_epd = W_p_GW_ref - W_a_GW_ref / (omega * omega);
   Q_epd(2) = Q_epd(2) - HEIGHTREF;
 
   if ((ctrl_mode == 0 || ctrl_mode == 1 || ctrl_mode == 5))
@@ -447,8 +437,6 @@ void SbsController::set_desiredVel()
     A_p_BA_ref(0) = posRB(0) * 10.0;
     A_p_BA_ref(1) = -0.21 + posRB(1) * 5.0;
     A_p_BA_ref(2) = posRB(2) * 8.0;
-
-
   }
   else if (ctrl_mode2 == 1)
   {
@@ -468,13 +456,10 @@ void SbsController::set_desiredTask()
   // W_v_GWd(1) = tra_gen.s[1];
   // W_p_GW_ref(1) = tra_gen.s[0];
 
-  comTask->refAccel(W_a_GW_ref);
-  comTask->refVel(W_v_GW_ref);
-  comTask->com(W_p_GW_ref);
   leftFootRatio = lipmTask->leftFootRatio();
-  lipmTask->target(W_p_GW_ref, W_v_GW_ref, W_a_GW_ref,Q_epd);
+  lipmTask->target(W_p_GW_ref, W_v_GW_ref, W_a_GW_ref, Q_epd);
 
-  otTask->orientation(Eigen::Matrix3d::Identity());
+  otTask->orientation(Matrix3d::Identity());
 
   int Joint_Index;
   for (int i = 0; i < 12; i++)
@@ -486,7 +471,7 @@ void SbsController::set_desiredTask()
 
   if ((ctrl_mode == 0 || ctrl_mode == 1 || ctrl_mode == 5))
   {
-    // otTask->orientation(Eigen::Matrix3d::Identity());
+    // otTask->orientation( Matrix3d::Identity());
   }
   else if (ctrl_mode2 == 0)
   {
@@ -557,10 +542,10 @@ void SbsController::output_data()
   fprintf(fp, "\n");
 }
 
-Eigen::Vector3d SbsController::sat_func(double _lim, const Eigen::Vector3d &val)
+Vector3d SbsController::sat_func(double _lim, const Vector3d &val)
 {
   double lim = fabs(_lim);
-  Eigen::Vector3d result;
+  Vector3d result;
 
   for (int i = 0; i < 3; i++)
   {
