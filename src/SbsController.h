@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <mc_control/mc_controller.h>
 // #include <mc_tasks/PostureTask.h>
-#include <mc_tasks/CoMTask.h>
 #include <mc_tasks/RelativeEndEffectorTask.h>
 #include <mc_tasks/lipm_stabilizer/StabilizerTask.h>
 
@@ -45,7 +44,7 @@ protected:
 private:
   Falcon_Driver right_falcon, left_falcon;
   mc_rtc::Configuration config_;
-  std::shared_ptr<mc_tasks::CoMTask> comTask;
+
   std::shared_ptr<mc_tasks::OrientationTask> otTask;
   std::shared_ptr<mc_tasks::RelativeEndEffectorTask> efTask_left, efTask_right;
   std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask> lipmTask;
