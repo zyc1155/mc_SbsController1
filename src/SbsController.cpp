@@ -1,7 +1,7 @@
 #include "SbsController.h"
 
 SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rtc::Configuration &config)
-    : mc_control::MCController(rm, dt), right_falcon(0), left_falcon(1)
+    : mc_control::MCController(rm, dt)
 {
   config_.load(config);
   solver().addConstraintSet(contactConstraint);
@@ -91,6 +91,12 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   ctrl_mode = 0;
   ctrl_mode2 = 0;
+
+  sva::ForceVecd force_limit, error_limit, admittance;
+  force_limit = sva::ForceVecd(Vector3d::Constant(1), Vector3d::Constant(10));
+  error_limit = sva::ForceVecd(Vector3d::Constant(10.0), Vector3d::Constant(0.01));
+  admittance = sva::ForceVecd(Vector3d::Constant(1.0), Vector3d::Constant(0.5));
+
   W_v_GW_ref = Vector3d::Zero();
   W_v_GWd = Vector3d::Zero();
   Q_epd = Vector3d::Zero();
@@ -289,13 +295,13 @@ void SbsController::get_values()
 void SbsController::set_CtrlPos()
 {
 
-  posRB_ = right_falcon.Get_Pos();
-  posRA_ = left_falcon.Get_Pos();
+  // posRB_ = right_falcon.Get_Pos();
+  // posRA_ = left_falcon.Get_Pos();
 
-  posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
-  posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
-  // posRB << .0,.0,.0;
-  // posRA << .0,.0,.0;
+  // posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
+  // posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
+  posRB << .0,.0,.0;
+  posRA << .0,.0,.0;
 
   if (rightFootLift_)
   {
@@ -342,15 +348,27 @@ void SbsController::state_swiching()
     ctrl_mode2 = 0;
     timer_mode += timeStep;
 
-    if ((timer_mode > 1.0) && B_f_B(2) > 5.0)
+    if ((timer_mode > 1.0) && B_f_B(2) > 10.0)
     {
-      ctrl_mode = 0;
+      ctrl_mode = 2;
       solver().removeTask(efTask_right);
-      addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
-      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-      Q_ref = (W_p_AW + W_p_BW) / 2.0;
-      Q_ref(2) += HEIGHTREF;
+      timer_mode = 0;
     }
+  }
+  else if (ctrl_mode == 2)
+  {
+    ctrl_mode2 = 0;
+    // timer_mode += timeStep;
+
+    // if ((timer_mode > 1.0) && B_f_B(2) > 5.0)
+    // {
+    //   ctrl_mode = 0;
+    //   solver().removeTask(efTask_right);
+    //   addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
+    //   lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
+    //   Q_ref = (W_p_AW + W_p_BW) / 2.0;
+    //   Q_ref(2) += HEIGHTREF;
+    // }
   }
   else if (ctrl_mode == 5)
   {
@@ -370,16 +388,16 @@ void SbsController::state_swiching()
   else if (ctrl_mode == 6)
   {
     ctrl_mode2 = 1;
-    timer_mode += timeStep;
-    if ((timer_mode > 1.0) && A_f_A(2) > 5.0)
-    {
-      ctrl_mode = 0;
-      solver().removeTask(efTask_left);
-      addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
-      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-      Q_ref = (W_p_AW + W_p_BW) / 2.0;
-      Q_ref(2) += HEIGHTREF;
-    }
+    // timer_mode += timeStep;
+    // if ((timer_mode > 1.0) && A_f_A(2) > 5.0)
+    // {
+    //   ctrl_mode = 0;
+    //   solver().removeTask(efTask_left);
+    //   addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
+    //   lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
+    //   Q_ref = (W_p_AW + W_p_BW) / 2.0;
+    //   Q_ref(2) += HEIGHTREF;
+    // }
   }
   else if ((ctrl_mode == 0 && vel_posRB(2) > 0.05 && posRB(2) > W_p_BW(2)))
   {
@@ -437,12 +455,22 @@ void SbsController::set_desiredVel()
     A_p_BA_ref(0) = posRB(0) * 10.0;
     A_p_BA_ref(1) = -0.21 + posRB(1) * 5.0;
     A_p_BA_ref(2) = posRB(2) * 8.0;
+
+    // Dampling control
+    sva::ForceVecd d_delta = error_func(right);
+    sva::PTransformd delta(mc_rbdyn::rpyToMat(timeStep * d_delta.couple()), timeStep * d_delta.force());
+    A_T_BA_d = delta * sva::PTransformd(A_p_BA_ref);
   }
   else if (ctrl_mode2 == 1)
   {
     B_p_AB_ref(0) = posRA(0) * 10.0;
     B_p_AB_ref(1) = 0.21 + posRA(1) * 5.0;
     B_p_AB_ref(2) = posRA(2) * 8.0;
+
+    // Dampling control
+    sva::ForceVecd d_delta = error_func(left);
+    sva::PTransformd delta(mc_rbdyn::rpyToMat(timeStep * d_delta.couple()), timeStep * d_delta.force());
+    B_T_AB_d = delta * sva::PTransformd(B_p_AB_ref);
   }
 }
 
@@ -475,13 +503,13 @@ void SbsController::set_desiredTask()
   }
   else if (ctrl_mode2 == 0)
   {
-    efTask_right->set_ef_pose(sva::PTransformd(A_p_BA_ref));
+    efTask_right->set_ef_pose(sva::PTransformd(A_T_BA_d));
 
     // otTask->orientation(W_R_H);
   }
   else if (ctrl_mode2 == 1)
   {
-    efTask_left->set_ef_pose(sva::PTransformd(B_p_AB_ref));
+    efTask_left->set_ef_pose(sva::PTransformd(B_T_AB_d));
     // otTask->orientation(W_R_H);
   }
 }
@@ -558,6 +586,47 @@ Vector3d SbsController::sat_func(double _lim, const Vector3d &val)
   }
 
   return result;
+}
+
+sva::ForceVecd SbsController::error_func(const sva::ForceVecd &f_m)
+{
+  Vector3d measure_, limit_f, limit_e, gain_;
+  Vector3d res[2];
+  for (int j = 0; j < 2; j++)
+  {
+    if (j == 0)
+    {
+      measure_ = f_m.couple();
+      limit_f = force_limit.couple();
+      limit_e = error_limit.couple();
+      gain_ = admittance.couple();
+    }
+    else
+    {
+      measure_ = f_m.force();
+      limit_f = force_limit.force();
+      limit_e = error_limit.force();
+      gain_ = admittance.force();
+    }
+
+    for (int i = 0; i < 3; i++)
+    {
+      if (measure_(i) > limit_f(i))
+      {
+        res[j](i) = gain_(i) * (measure_(i) - limit_f(i));
+        if (res[j](i) > limit_e(i))
+          res[j](i) = limit_e(i);
+      }
+      else if (measure_(i) < -limit_f(i))
+      {
+        res[j](i) = gain_(i) * (measure_(i) + limit_f(i));
+        if (res[j](i) < -limit_e(i))
+          res[j](i) = -limit_e(i);
+      }
+    }
+  }
+
+  return sva::ForceVecd(res[0], res[1]);
 }
 
 void SbsController::createGUI()

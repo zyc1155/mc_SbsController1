@@ -37,12 +37,13 @@ struct SbsController_DLLAPI SbsController : public mc_control::MCController
   void output_data();
 
   Vector3d sat_func(double lim, const Vector3d &val);
+  sva::ForceVecd error_func(const sva::ForceVecd &f_m);
 
 protected:
   void createGUI();
 
 private:
-  Falcon_Driver right_falcon, left_falcon;
+  // Falcon_Driver right_falcon, left_falcon;
   mc_rtc::Configuration config_;
 
   std::shared_ptr<mc_tasks::OrientationTask> otTask;
@@ -66,11 +67,13 @@ private:
   Matrix3d R_0_mIMU;
   Matrix3d W_R_A, W_R_B, W_R_H;
   Vector3d A_p_BA_ref, B_p_AB_ref, W_p_GW_ref, W_p_GWd;
+  sva::PTransformd A_T_BA_d, B_T_AB_d;
   Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd, W_v_GW_p, W_v_GW_ref, W_a_GW_ref, W_a_GWdp;
 
   Vector3d A_f_A, B_f_B, A_n_A, B_n_B, W_f_A, W_f_B, W_n_A, W_n_B;
 
   sva::ForceVecd left, right, world_wrench;
+  sva::ForceVecd force_limit, error_limit, admittance;
 
   // Set 'true' to lift right foot
   bool rightFootLift_ = false;
