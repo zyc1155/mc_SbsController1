@@ -123,7 +123,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
                                                   leftFootRatio);
                         });
 
-  // createGUI();
+  createGUI();
 
   logger().addLogEntries(
       this,
@@ -300,8 +300,8 @@ void SbsController::set_CtrlPos()
 
   // posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
   // posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
-  posRB << .0,.0,.0;
-  posRA << .0,.0,.0;
+  // posRB << .0, .0, .0;
+  // posRA << .0, .0, .0;
 
   if (rightFootLift_)
   {
@@ -631,14 +631,14 @@ sva::ForceVecd SbsController::error_func(const sva::ForceVecd &f_m)
 
 void SbsController::createGUI()
 {
-  // auto & gui = *ctl.gui();
-  gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::Label("Lift right foot", [this]()
-                                                                  { return rightFootLift_; }),
-                    mc_rtc::gui::Checkbox(
-                        "Activated", [this]()
-                        { return rightFootLift_; },
-                        [this]()
-                        { rightFootLift_ = !rightFootLift_; }));
+  // gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::Label("Lift right foot", [this]()
+  //                                                                 { return rightFootLift_; }),
+  //                   mc_rtc::gui::Checkbox(
+  //                       "Activated", [this]()
+  //                       { return rightFootLift_; },
+  //                       [this]()
+  //                       { rightFootLift_ = !rightFootLift_; }));
+  gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::ArrayInput("Falcon_left", posRA), mc_rtc::gui::ArrayInput("Falcon_right", posRB));
 }
 
 CONTROLLER_CONSTRUCTOR("SbsController", SbsController)
