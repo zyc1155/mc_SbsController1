@@ -23,8 +23,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   //  Vector6d dof =  Vector6d::Zero();
   // dof(2) = 1.0;
 
-  addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
-  addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
+  // addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
+  // addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
 
   otTask = std::make_shared<mc_tasks::OrientationTask>("Body", robots(), 0, 100.0, 1.0); //"Chest_Link2"
 
@@ -50,18 +50,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   postureTask->dimWeight(ww);
 
-  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5", 10.0, 1.0);
-  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5", 10.0, 1.0);
-
-  // efTask_left->positionTask->stiffness(10.0);
-  // efTask_left->orientationTask->stiffness(10.0);
-  efTask_left->positionTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
-  efTask_left->orientationTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
-
-  // efTask_right->positionTask->stiffness(10.0);
-  // efTask_right->orientationTask->stiffness(10.0);
-  efTask_right->positionTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
-  efTask_right->orientationTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
+  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5");
+  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5");
 
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
   stabiConf.comHeight = HEIGHTREF;
@@ -84,6 +74,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
       solver().dt());
 
   lipmTask->configure(stabiConf);
+  lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
 
   solver().addTask(lipmTask);
 
@@ -91,6 +82,9 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   ctrl_mode = 0;
   ctrl_mode2 = 0;
+
+  posRA = Vector3d::Zero();
+  posRB = Vector3d::Zero();
 
   sva::ForceVecd force_limit, error_limit, admittance;
   force_limit = sva::ForceVecd(Vector3d::Constant(1), Vector3d::Constant(10));
@@ -303,11 +297,6 @@ void SbsController::set_CtrlPos()
   // posRB << .0, .0, .0;
   // posRA << .0, .0, .0;
 
-  if (rightFootLift_)
-  {
-    posRB << .0, .0, .01;
-  }
-
   if (first)
   {
     posRAp = posRA;
@@ -338,7 +327,7 @@ void SbsController::state_swiching()
       ctrl_mode = 2;
       timer_mode = 0.0;
 
-      removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
+      // removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
       solver().addTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
     }
@@ -380,7 +369,7 @@ void SbsController::state_swiching()
       ctrl_mode = 6;
       timer_mode = 0.0;
 
-      removeContact({robot().name(), "ground", "LeftFoot", "AllGround"});
+      // removeContact({robot().name(), "ground", "LeftFoot", "AllGround"});
       solver().addTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Right});
     }
@@ -388,16 +377,26 @@ void SbsController::state_swiching()
   else if (ctrl_mode == 6)
   {
     ctrl_mode2 = 1;
-    // timer_mode += timeStep;
-    // if ((timer_mode > 1.0) && A_f_A(2) > 5.0)
-    // {
-    //   ctrl_mode = 0;
-    //   solver().removeTask(efTask_left);
-    //   addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
-    //   lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-    //   Q_ref = (W_p_AW + W_p_BW) / 2.0;
-    //   Q_ref(2) += HEIGHTREF;
-    // }
+    timer_mode += timeStep;
+    if ((timer_mode > 1.0) && A_f_A(2) > 5.0)
+    {
+      ctrl_mode = 7;
+      // ctrl_mode = 0;
+      // solver().removeTask(efTask_left);
+      // addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
+      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
+    }
+  }
+  else if (ctrl_mode == 7)
+  {
+    if (rightFootLift_)
+    {
+      ctrl_mode = 0;
+      solver().removeTask(efTask_left);
+      // addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
+      Q_ref = (W_p_AW + W_p_BW) / 2.0;
+      Q_ref(2) += HEIGHTREF;
+    }
   }
   else if ((ctrl_mode == 0 && vel_posRB(2) > 0.05 && posRB(2) > W_p_BW(2)))
   {
@@ -509,7 +508,7 @@ void SbsController::set_desiredTask()
   }
   else if (ctrl_mode2 == 1)
   {
-    efTask_left->set_ef_pose(sva::PTransformd(B_T_AB_d));
+    efTask_left->set_ef_pose(sva::PTransformd(B_p_AB_ref));
     // otTask->orientation(W_R_H);
   }
 }
@@ -631,13 +630,13 @@ sva::ForceVecd SbsController::error_func(const sva::ForceVecd &f_m)
 
 void SbsController::createGUI()
 {
-  // gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::Label("Lift right foot", [this]()
-  //                                                                 { return rightFootLift_; }),
-  //                   mc_rtc::gui::Checkbox(
-  //                       "Activated", [this]()
-  //                       { return rightFootLift_; },
-  //                       [this]()
-  //                       { rightFootLift_ = !rightFootLift_; }));
+  gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::Label("Lift right foot", [this]()
+                                                                  { return rightFootLift_; }),
+                    mc_rtc::gui::Checkbox(
+                        "Activated", [this]()
+                        { return rightFootLift_; },
+                        [this]()
+                        { rightFootLift_ = !rightFootLift_; }));
   gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::ArrayInput("Falcon_left", posRA), mc_rtc::gui::ArrayInput("Falcon_right", posRB));
 }
 
