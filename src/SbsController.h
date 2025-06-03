@@ -46,7 +46,6 @@ private:
   // Falcon_Driver right_falcon, left_falcon;
   mc_rtc::Configuration config_;
 
-  std::shared_ptr<mc_tasks::OrientationTask> otTask;
   std::shared_ptr<mc_tasks::RelativeEndEffectorTask> efTask_left, efTask_right;
   std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask> lipmTask;
 
@@ -61,7 +60,7 @@ private:
 
   Vector3d posRA_, posRB_;
   Vector3d posRA, posRB, posRAp, posRBp, vel_posRA, vel_posRB;
-  Vector3d Q_ref, Q_ep, Q_epd, W_Q_W, W_Q_A, W_Q_B, W_Q;
+  Vector3d Q_ref, Q_ep, Q_epd, W_Q_W, W_Q_A, W_Q_B, W_Q, A_Q_A,B_Q_B;
 
   Vector3d W_p_AW, W_p_BW, W_p_GW, W_p_BW_, W_p_GW_p, W_p_AW_;
   Matrix3d R_0_mIMU;
