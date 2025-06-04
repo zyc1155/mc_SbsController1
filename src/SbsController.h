@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <mc_control/mc_controller.h>
 // #include <mc_tasks/PostureTask.h>
-#include <mc_tasks/RelativeEndEffectorTask.h>
+#include <mc_tasks/EndEffectorTask.h>
 #include <mc_tasks/lipm_stabilizer/StabilizerTask.h>
 
 #include "api.h"
@@ -20,6 +20,21 @@ using Eigen::VectorXd;
 const double GRAVITY = 9.8;
 const double HEIGHTREF = 0.9;
 const double A_LIM = 0.45;
+
+namespace mc_tasks
+{
+  struct MC_TASKS_DLLAPI EndEffectorTask_NoGUI : public EndEffectorTask
+  {
+    EndEffectorTask_NoGUI(const std::string &bodyName,
+                    const mc_rbdyn::Robots &robots,
+                    unsigned int robotIndex,
+                    double stiffness = 2.0,
+                    double weight = 1000.0);
+
+  protected:
+    void addToGUI(mc_rtc::gui::StateBuilder &gui) override;
+  };
+}
 
 struct SbsController_DLLAPI SbsController : public mc_control::MCController
 {
@@ -47,7 +62,7 @@ private:
   mc_rtc::Configuration config_;
 
   std::shared_ptr<mc_tasks::OrientationTask> otTask;
-  std::shared_ptr<mc_tasks::RelativeEndEffectorTask> efTask_left, efTask_right;
+  std::shared_ptr<mc_tasks::EndEffectorTask_NoGUI> efTask_left, efTask_right;
   std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask> lipmTask;
 
   FILE *fp;
@@ -59,6 +74,7 @@ private:
   std::chrono::_V2::system_clock::time_point z_start;
   Matrix3d COMShifter_Kp, COMShifter_Kd;
 
+  Vector3d W_pos_A, W_pos_B;
   Vector3d posRA_, posRB_;
   Vector3d posRA, posRB, posRAp, posRBp, vel_posRA, vel_posRB;
   Vector3d Q_ref, Q_ep, Q_epd, W_Q_W, W_Q_A, W_Q_B, W_Q;
