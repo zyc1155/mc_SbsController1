@@ -11,7 +11,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   solver().addTask(postureTask);
 
-  std::vector<std::string> activeJoints = {"RCY", "RCR", "RCP", "RKP", "RAP", "RAR", "LCY", "LCR", "LCP", "LKP", "LAP", "LAR"};
+  std::vector<std::string> activeJoints = {"Root", "RCY", "RCR", "RCP", "RKP", "RAP", "RAR", "LCY", "LCR", "LCP", "LKP", "LAP", "LAR"};
 
   solver().setContacts({{}});
 
@@ -23,45 +23,19 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   //  Vector6d dof =  Vector6d::Zero();
   // dof(2) = 1.0;
 
-  addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
-  addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
+  // addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
+  // addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
 
-  otTask = std::make_shared<mc_tasks::OrientationTask>("Body", robots(), 0, 100.0, 1.0); //"Chest_Link2"
+  postureTask->stiffness(10.0);
+  postureTask->weight(1000.0);
 
-  otTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
-  solver().addTask(otTask);
+  postureTask->selectUnactiveJoints(solver(), activeJoints);
 
-  otTask->orientation(Matrix3d::Identity());
+  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5");
+  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5");
 
-  postureTask->stiffness(100.0);
-  postureTask->weight(1.0);
-
-  std::vector<tasks::qp::JointStiffness> stiffnesses;
-
-  for (int i = 0; i < 12; i++)
-  {
-    stiffnesses.push_back({activeJoints[i], 1.0});
-  }
-  postureTask->jointStiffness(solver(), stiffnesses);
-
-  VectorXd ww(59);
-  ww.head(18) = MatrixXd::Constant(18, 1, 1.0);
-  ww.tail(41) = MatrixXd::Constant(41, 1, 1000.0);
-
-  postureTask->dimWeight(ww);
-
-  efTask_left = std::make_shared<mc_tasks::EndEffectorTask_NoGUI>("Lleg_Link5", robots(), 0, 10.0, 1.0);
-  efTask_right = std::make_shared<mc_tasks::EndEffectorTask_NoGUI>("Rleg_Link5", robots(), 0, 10.0, 1.0);
-
-  // efTask_left->positionTask->stiffness(10.0);
-  // efTask_left->orientationTask->stiffness(10.0);
-  efTask_left->positionTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
-  efTask_left->orientationTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
-
-  // efTask_right->positionTask->stiffness(10.0);
-  // efTask_right->orientationTask->stiffness(10.0);
-  efTask_right->positionTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
-  efTask_right->orientationTask->dimWeight(MatrixXd::Constant(3, 1, 1000.0));
+  efTask_left->selectActiveJoints(solver(), activeJoints);
+  efTask_right->selectActiveJoints(solver(), activeJoints);
 
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
   stabiConf.comHeight = HEIGHTREF;
@@ -84,6 +58,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
       solver().dt());
 
   lipmTask->configure(stabiConf);
+  lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
 
   solver().addTask(lipmTask);
 
@@ -91,6 +66,9 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   ctrl_mode = 0;
   ctrl_mode2 = 0;
+
+  posRA = Vector3d::Zero();
+  posRB = Vector3d::Zero();
 
   sva::ForceVecd force_limit, error_limit, admittance;
   force_limit = sva::ForceVecd(Vector3d::Constant(1), Vector3d::Constant(10));
@@ -116,14 +94,14 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   first = true;
   // fp = fopen("/home/zyc/data.csv", "w");
 
-  leftFootRatio = 0.5;
-  datastore().make_call("KinematicAnchorFrame::" + robot().name(),
-                        [this](const mc_rbdyn::Robot &robot)
-                        {
-                          return sva::interpolate(robot.surfacePose("RightFoot"),
-                                                  robot.surfacePose("LeftFoot"),
-                                                  leftFootRatio);
-                        });
+  // leftFootRatio = 0.5;
+  // datastore().make_call("KinematicAnchorFrame::" + robot().name(),
+  //                       [this](const mc_rbdyn::Robot &robot)
+  //                       {
+  //                         return sva::interpolate(robot.surfacePose("RightFoot"),
+  //                                                 robot.surfacePose("LeftFoot"),
+  //                                                 leftFootRatio);
+  //                       });
 
   createGUI();
 
@@ -153,6 +131,10 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
       { return W_Q_A; },
       "ZMP_R", [this]()
       { return W_Q_B; },
+      "COP_L", [this]()
+      { return A_Q_A; },
+      "COP_R", [this]()
+      { return B_Q_B; },
       "EZMP", [this]()
       { return Q_epd; },
       "real_EZMP", [this]()
@@ -186,7 +168,6 @@ void SbsController::reset(const mc_control::ControllerResetData &reset_data)
 {
   mc_control::MCController::reset(reset_data);
 
-  otTask->reset();
   lipmTask->reset();
 }
 
@@ -255,6 +236,16 @@ void SbsController::get_values()
   // W_p_GW_= realRobot().com();
   // W_p_GW_(2) = 0.0;
 
+  if (A_f_A(2) > 1e-1)
+    A_Q_A << -A_n_A(1) / A_f_A(2), A_n_A(0) / A_f_A(2), .0;
+  else
+    A_Q_A = Vector3d::Zero();
+
+  if (B_f_B(2) > 1e-1)
+    B_Q_B << -B_n_B(1) / B_f_B(2), B_n_B(0) / B_f_B(2), .0;
+  else
+    B_Q_B = Vector3d::Zero();
+
   if (W_f_A(2) > 1e-1)
     W_Q_A << -W_n_A(1) / W_f_A(2), W_n_A(0) / W_f_A(2), .0;
   else
@@ -305,11 +296,6 @@ void SbsController::set_CtrlPos()
   // posRB << .0, .0, .0;
   // posRA << .0, .0, .0;
 
-  if (rightFootLift_)
-  {
-    posRB << .0, .0, .01;
-  }
-
   if (first)
   {
     posRAp = posRA;
@@ -340,9 +326,10 @@ void SbsController::state_swiching()
       ctrl_mode = 2;
       timer_mode = 0.0;
 
-      removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
+      // removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
       solver().addTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
+      A_R_B_ref = W_R_A.transpose() * W_R_B;
     }
   }
   else if (ctrl_mode == 2)
@@ -352,25 +339,22 @@ void SbsController::state_swiching()
 
     if ((timer_mode > 1.0) && B_f_B(2) > 10.0)
     {
-      ctrl_mode = 2;
-      solver().removeTask(efTask_right);
+      ctrl_mode = 3;
       timer_mode = 0;
+
+      solver().removeTask(efTask_right);
+      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
     }
   }
-  else if (ctrl_mode == 2)
+  else if (ctrl_mode == 3)
   {
-    ctrl_mode2 = 0;
-    // timer_mode += timeStep;
-
-    // if ((timer_mode > 1.0) && B_f_B(2) > 5.0)
-    // {
-    //   ctrl_mode = 0;
-    //   solver().removeTask(efTask_right);
-    //   addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
-    //   lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-    //   Q_ref = (W_p_AW + W_p_BW) / 2.0;
-    //   Q_ref(2) += HEIGHTREF;
-    // }
+    if (rightFootLift_)
+    {
+      ctrl_mode = 0;
+      Q_ref = (W_p_AW + W_p_BW) / 2.0;
+      Q_ref(2) += HEIGHTREF;
+    }
+    // lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
   }
   else if (ctrl_mode == 5)
   {
@@ -382,24 +366,33 @@ void SbsController::state_swiching()
       ctrl_mode = 6;
       timer_mode = 0.0;
 
-      removeContact({robot().name(), "ground", "LeftFoot", "AllGround"});
       solver().addTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Right});
+      B_R_A_ref = W_R_B.transpose() * W_R_A;
     }
   }
   else if (ctrl_mode == 6)
   {
     ctrl_mode2 = 1;
-    // timer_mode += timeStep;
-    // if ((timer_mode > 1.0) && A_f_A(2) > 5.0)
-    // {
-    //   ctrl_mode = 0;
-    //   solver().removeTask(efTask_left);
-    //   addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
-    //   lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-    //   Q_ref = (W_p_AW + W_p_BW) / 2.0;
-    //   Q_ref(2) += HEIGHTREF;
-    // }
+    timer_mode += timeStep;
+    if ((timer_mode > 1.0) && A_f_A(2) > 10.0)
+    {
+      ctrl_mode = 7;
+      timer_mode = 0;
+
+      solver().removeTask(efTask_left);
+      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
+    }
+  }
+  else if (ctrl_mode == 7)
+  {
+    if (rightFootLift_)
+    {
+      ctrl_mode = 0;
+      Q_ref = (W_p_AW + W_p_BW) / 2.0;
+      Q_ref(2) += HEIGHTREF;
+    }
+    // lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
   }
   else if ((ctrl_mode == 0 && vel_posRB(2) > 0.05 && posRB(2) > W_p_BW(2)))
   {
@@ -478,7 +471,6 @@ void SbsController::set_desiredVel()
 
 void SbsController::set_desiredTask()
 {
-  std::vector<std::string> activeJoints = {"LCY", "LCR", "LCP", "LKP", "LAP", "LAR", "RCY", "RCR", "RCP", "RKP", "RAP", "RAR"};
 
   // tra_gen.Cal_Func(ttime);
 
@@ -489,29 +481,19 @@ void SbsController::set_desiredTask()
   leftFootRatio = lipmTask->leftFootRatio();
   lipmTask->target(W_p_GW_ref, W_v_GW_ref, W_a_GW_ref, Q_epd);
 
-  otTask->orientation(Matrix3d::Identity());
-
-  int Joint_Index;
-  for (int i = 0; i < 12; i++)
-  {
-    Joint_Index = robot().jointIndexByName(activeJoints[i]);
-    postureTask->target({{activeJoints[i], robot().q()[Joint_Index]}});
-  }
-  // postureTask->target({{"LSP", {-6.2}}});
-
   if ((ctrl_mode == 0 || ctrl_mode == 1 || ctrl_mode == 5))
   {
     // otTask->orientation( Matrix3d::Identity());
   }
   else if (ctrl_mode2 == 0)
   {
-    efTask_right->set_ef_pose(sva::PTransformd(Matrix3d::Identity(), W_p_AW + W_R_A * A_p_BA_ref));
+    efTask_right->set_ef_pose(sva::PTransformd(A_T_BA_d));
 
     // otTask->orientation(W_R_H);
   }
   else if (ctrl_mode2 == 1)
   {
-    efTask_left->set_ef_pose(sva::PTransformd(Matrix3d::Identity(), W_p_BW + W_R_B * B_p_AB_ref));
+    efTask_left->set_ef_pose(sva::PTransformd(B_T_AB_d));
     // otTask->orientation(W_R_H);
   }
 }
@@ -633,13 +615,13 @@ sva::ForceVecd SbsController::error_func(const sva::ForceVecd &f_m)
 
 void SbsController::createGUI()
 {
-  // gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::Label("Lift right foot", [this]()
-  //                                                                 { return rightFootLift_; }),
-  //                   mc_rtc::gui::Checkbox(
-  //                       "Activated", [this]()
-  //                       { return rightFootLift_; },
-  //                       [this]()
-  //                       { rightFootLift_ = !rightFootLift_; }));
+  gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::Label("Lift right foot", [this]()
+                                                                  { return rightFootLift_; }),
+                    mc_rtc::gui::Checkbox(
+                        "Activated", [this]()
+                        { return rightFootLift_; },
+                        [this]()
+                        { rightFootLift_ = !rightFootLift_; }));
   gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::ArrayInput("Falcon_left", posRA), mc_rtc::gui::ArrayInput("Falcon_right", posRB));
 }
 
