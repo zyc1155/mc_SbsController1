@@ -65,6 +65,7 @@ private:
   Vector3d W_p_AW, W_p_BW, W_p_GW, W_p_BW_, W_p_GW_p, W_p_AW_;
   Matrix3d R_0_mIMU;
   Matrix3d W_R_A, W_R_B, W_R_H;
+  Matrix3d A_R_B_ref, B_R_A_ref;
   Vector3d A_p_BA_ref, B_p_AB_ref, W_p_GW_ref, W_p_GWd;
   sva::PTransformd A_T_BA_d, B_T_AB_d;
   Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd, W_v_GW_p, W_v_GW_ref, W_a_GW_ref, W_a_GWdp;

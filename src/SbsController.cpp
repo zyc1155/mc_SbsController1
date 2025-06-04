@@ -327,6 +327,7 @@ void SbsController::state_swiching()
       // removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
       solver().addTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
+      A_R_B_ref = W_R_A.transpose() * W_R_B;
     }
   }
   else if (ctrl_mode == 2)
@@ -351,6 +352,7 @@ void SbsController::state_swiching()
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
     }
+    // lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
   }
   else if (ctrl_mode == 5)
   {
@@ -364,6 +366,7 @@ void SbsController::state_swiching()
 
       solver().addTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Right});
+      B_R_A_ref = W_R_B.transpose() * W_R_A;
     }
   }
   else if (ctrl_mode == 6)
@@ -387,6 +390,7 @@ void SbsController::state_swiching()
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
     }
+    // lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
   }
   else if ((ctrl_mode == 0 && vel_posRB(2) > 0.05 && posRB(2) > W_p_BW(2)))
   {
@@ -481,13 +485,13 @@ void SbsController::set_desiredTask()
   }
   else if (ctrl_mode2 == 0)
   {
-    efTask_right->set_ef_pose(sva::PTransformd(A_T_BA_d));
+    efTask_right->set_ef_pose(sva::PTransformd(A_R_B_ref, A_p_BA_ref));
 
     // otTask->orientation(W_R_H);
   }
   else if (ctrl_mode2 == 1)
   {
-    efTask_left->set_ef_pose(sva::PTransformd(B_p_AB_ref));
+    efTask_left->set_ef_pose(sva::PTransformd(B_R_A_ref, B_p_AB_ref));
     // otTask->orientation(W_R_H);
   }
 }
