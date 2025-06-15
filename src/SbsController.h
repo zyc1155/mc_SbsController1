@@ -3,8 +3,7 @@
 #include <stdio.h>
 #include <mc_control/mc_controller.h>
 // #include <mc_tasks/PostureTask.h>
-#include <mc_tasks/EndEffectorTask.h>
-#include <mc_tasks/lipm_stabilizer/StabilizerTask.h>
+#include "ModifiedTasks.h"
 
 #include "api.h"
 #include "driver.h"
@@ -21,20 +20,7 @@ const double GRAVITY = 9.8;
 const double HEIGHTREF = 0.9;
 const double A_LIM = 0.45;
 
-namespace mc_tasks
-{
-  struct MC_TASKS_DLLAPI EndEffectorTask_NoGUI : public EndEffectorTask
-  {
-    EndEffectorTask_NoGUI(const std::string &bodyName,
-                    const mc_rbdyn::Robots &robots,
-                    unsigned int robotIndex,
-                    double stiffness = 2.0,
-                    double weight = 1000.0);
 
-  protected:
-    void addToGUI(mc_rtc::gui::StateBuilder &gui) override;
-  };
-}
 
 struct SbsController_DLLAPI SbsController : public mc_control::MCController
 {
@@ -61,9 +47,9 @@ private:
   // Falcon_Driver right_falcon, left_falcon;
   mc_rtc::Configuration config_;
 
-  std::shared_ptr<mc_tasks::OrientationTask> otTask;
+  // std::shared_ptr<mc_tasks::OrientationTask> otTask;
   std::shared_ptr<mc_tasks::EndEffectorTask_NoGUI> efTask_left, efTask_right;
-  std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask> lipmTask;
+  std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask_Zyc> lipmTask;
 
   FILE *fp;
   bool first;
@@ -77,12 +63,12 @@ private:
   Vector3d W_pos_A, W_pos_B;
   Vector3d posRA_, posRB_;
   Vector3d posRA, posRB, posRAp, posRBp, vel_posRA, vel_posRB;
-  Vector3d Q_ref, Q_ep, Q_epd, W_Q_W, W_Q_A, W_Q_B, W_Q, A_Q_A,B_Q_B;
+  Vector3d Q_ref, Q_ep, Q_epd, W_Q_W, W_Q_A, W_Q_B, W_Q, A_Q_A, B_Q_B;
 
   Vector3d W_p_AW, W_p_BW, W_p_GW, W_p_BW_, W_p_GW_p, W_p_AW_;
   Matrix3d R_0_mIMU;
   Matrix3d W_R_A, W_R_B, W_R_H;
-  Matrix3d A_R_B_ref, B_R_A_ref;
+  Matrix3d W_R_B_ref, W_R_A_ref;
   Vector3d A_p_BA_ref, B_p_AB_ref, W_p_GW_ref, W_p_GWd;
   sva::PTransformd A_T_BA_d, B_T_AB_d;
   Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd, W_v_GW_p, W_v_GW_ref, W_a_GW_ref, W_a_GWdp;

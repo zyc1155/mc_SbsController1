@@ -31,8 +31,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   postureTask->selectUnactiveJoints(solver(), activeJoints);
 
-  efTask_left = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Lleg_Link5", robots(), 0, "Rleg_Link5");
-  efTask_right = std::make_shared<mc_tasks::RelativeEndEffectorTask>("Rleg_Link5", robots(), 0, "Lleg_Link5");
+  efTask_left = std::make_shared<mc_tasks::EndEffectorTask_NoGUI>("Lleg_Link5", robots(), 0);
+  efTask_right = std::make_shared<mc_tasks::EndEffectorTask_NoGUI>("Rleg_Link5", robots(), 0);
 
   efTask_left->selectActiveJoints(solver(), activeJoints);
   efTask_right->selectActiveJoints(solver(), activeJoints);
@@ -48,7 +48,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   stabiConf.dcmDerivatorTimeConstant = 5;
   stabiConf.dcmIntegratorTimeConstant = 5; // 5.0
 
-  lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask>(
+  lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask_Zyc>(
       solver().robots(),
       solver().realRobots(),
       0,
@@ -69,6 +69,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   posRA = Vector3d::Zero();
   posRB = Vector3d::Zero();
+  W_R_A_ref = Matrix3d::Zero();
+  W_R_B_ref = Matrix3d::Zero();
 
   sva::ForceVecd force_limit, error_limit, admittance;
   force_limit = sva::ForceVecd(Vector3d::Constant(1), Vector3d::Constant(10));
@@ -207,16 +209,21 @@ void SbsController::get_values()
   W_R_A = realRobot().surfacePose("LeftFootCenter").rotation();
   W_p_AW = realRobot().surfacePose("LeftFootCenter").translation();
 
-  W_p_AW_ = realRobot().surfacePose("LeftFoot").translation();
+  W_p_AW_ = realRobot().frame("Lleg_Link5").position().translation();
 
   W_R_B = realRobot().surfacePose("RightFootCenter").rotation();
   W_p_BW = realRobot().surfacePose("RightFootCenter").translation();
 
-  W_p_BW_ = realRobot().surfacePose("RightFoot").translation();
+  W_p_BW_ = realRobot().frame("Rleg_Link5").position().translation();
 
   W_p_GW = realRobot().com();
   // W_v_GW = robot().comVelocity();
   // W_a_GW = robot().comAcceleration();
+  if (first)
+  {
+    W_pos_A = W_p_AW_;
+    W_pos_B = W_p_BW_;
+  }
 
   if (first)
     W_p_GW_p = W_p_GW;
@@ -326,10 +333,10 @@ void SbsController::state_swiching()
       ctrl_mode = 2;
       timer_mode = 0.0;
 
-      // removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
+      removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
       solver().addTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
-      A_R_B_ref = W_R_A.transpose() * W_R_B;
+      W_R_B_ref = W_R_B;
     }
   }
   else if (ctrl_mode == 2)
@@ -366,9 +373,10 @@ void SbsController::state_swiching()
       ctrl_mode = 6;
       timer_mode = 0.0;
 
+      removeContact({robot().name(), "ground", "LeftFoot", "AllGround"});
       solver().addTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Right});
-      B_R_A_ref = W_R_B.transpose() * W_R_A;
+      W_R_A_ref = W_R_A;
     }
   }
   else if (ctrl_mode == 6)
@@ -394,7 +402,7 @@ void SbsController::state_swiching()
     }
     // lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
   }
-  else if ((ctrl_mode == 0 && vel_posRB(2) > 0.05 && posRB(2) > W_p_BW(2)))
+  else if (ctrl_mode == 0 && W_pos_B(2) - W_p_BW_(2) > 1e-2)
   {
     ctrl_mode2 = 0;
 
@@ -402,7 +410,7 @@ void SbsController::state_swiching()
     Q_ref = W_p_AW;
     Q_ref(2) += HEIGHTREF;
   }
-  else if ((ctrl_mode == 0 && vel_posRA(2) > 0.05 && posRA(2) > W_p_AW(2)))
+  else if (ctrl_mode == 0 && W_pos_A(2) - W_p_AW_(2) > 1e-2)
   {
     ctrl_mode2 = 1;
 
@@ -487,13 +495,13 @@ void SbsController::set_desiredTask()
   }
   else if (ctrl_mode2 == 0)
   {
-    efTask_right->set_ef_pose(sva::PTransformd(A_T_BA_d));
+    efTask_right->set_ef_pose(sva::PTransformd(W_R_B_ref, W_pos_B));
 
     // otTask->orientation(W_R_H);
   }
   else if (ctrl_mode2 == 1)
   {
-    efTask_left->set_ef_pose(sva::PTransformd(B_T_AB_d));
+    efTask_left->set_ef_pose(sva::PTransformd(W_R_A_ref, W_pos_A));
     // otTask->orientation(W_R_H);
   }
 }
@@ -622,59 +630,14 @@ void SbsController::createGUI()
                         { return rightFootLift_; },
                         [this]()
                         { rightFootLift_ = !rightFootLift_; }));
-  gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::ArrayInput("Falcon_left", posRA), mc_rtc::gui::ArrayInput("Falcon_right", posRB));
+  gui()->addElement({"SbsController", "Task"}, mc_rtc::gui::Point3D("Point_Left", [this]()
+                                                                    { return W_pos_A; }, [this](const Vector3d &pos)
+                                                                    { W_pos_A = pos; }),
+                    mc_rtc::gui::Point3D("Point_Right", [this]()
+                                         { return W_pos_B; }, [this](const Vector3d &pos)
+                                         { W_pos_B = pos; }));
 }
 
 CONTROLLER_CONSTRUCTOR("SbsController", SbsController)
 
-mc_tasks::EndEffectorTask_NoGUI::EndEffectorTask_NoGUI(const std::string &bodyName, const mc_rbdyn::Robots &robots, unsigned int robotIndex, double stiffness, double weight) : EndEffectorTask(robots.robot(robotIndex).frame(bodyName), stiffness, weight)
-{
-}
 
-void mc_tasks::EndEffectorTask_NoGUI::addToGUI(mc_rtc::gui::StateBuilder &gui)
-{
-  MetaTask::addToGUI(gui);
-  gui.addElement({"Tasks", name_},
-                 mc_rtc::gui::Transform("pos", [this]()
-                                        { return frame().position(); }));
-  gui.addElement({"Tasks", name_, "Gains", "Position"},
-                 mc_rtc::gui::NumberInput(
-                     "stiffness", [this]()
-                     { return this->positionTask->stiffness(); },
-                     [this](const double &s)
-                     { this->positionTask->setGains(s, this->positionTask->damping()); }),
-                 mc_rtc::gui::NumberInput(
-                     "damping", [this]()
-                     { return this->positionTask->damping(); },
-                     [this](const double &d)
-                     { this->positionTask->setGains(this->positionTask->stiffness(), d); }),
-                 mc_rtc::gui::NumberInput(
-                     "stiffness & damping", [this]()
-                     { return this->positionTask->stiffness(); },
-                     [this](const double &g)
-                     { this->positionTask->stiffness(g); }),
-                 mc_rtc::gui::NumberInput(
-                     "weight", [this]()
-                     { return this->positionTask->weight(); },
-                     [this](const double &w)
-                     { this->positionTask->weight(w); }));
-  gui.addElement({"Tasks", name_, "Gains", "Orientation"},
-                 mc_rtc::gui::NumberInput(
-                     "stiffness", [this]()
-                     { return this->orientationTask->stiffness(); }, [this](const double &s)
-                     { this->orientationTask->setGains(s, this->orientationTask->damping()); }),
-                 mc_rtc::gui::NumberInput(
-                     "damping", [this]()
-                     { return this->orientationTask->damping(); }, [this](const double &d)
-                     { this->orientationTask->setGains(this->orientationTask->stiffness(), d); }),
-                 mc_rtc::gui::NumberInput(
-                     "stiffness & damping", [this]()
-                     { return this->orientationTask->stiffness(); },
-                     [this](const double &g)
-                     { this->orientationTask->stiffness(g); }),
-                 mc_rtc::gui::NumberInput(
-                     "weight", [this]()
-                     { return this->orientationTask->weight(); },
-                     [this](const double &w)
-                     { this->orientationTask->weight(w); }));
-}

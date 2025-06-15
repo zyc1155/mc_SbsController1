@@ -1,10 +1,12 @@
 set(controller_SRC
   SbsController.cpp
+  ModifiedTasks.cpp
   driver.cpp
 )
 
 set(controller_HDR
   SbsController.h
+  ModifiedTasks.h
   driver.h
 )
 
