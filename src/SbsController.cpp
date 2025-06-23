@@ -130,9 +130,9 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
       "ZMP_total", [this]()
       { return W_Q_W; },
       "ZMP_L", [this]()
-      { return W_Q_A; },
+      { return A_Q_A; },
       "ZMP_R", [this]()
-      { return W_Q_B; },
+      { return B_Q_B; },
       "COP_L", [this]()
       { return A_Q_A; },
       "COP_R", [this]()
@@ -326,7 +326,6 @@ void SbsController::state_swiching()
   {
     Vector3d A_p_QA;
     A_p_QA = W_R_A.transpose() * (Q_epd - W_p_AW);
-    ctrl_mode2 = 0;
 
     if (fabs(A_p_QA(0)) < 0.01 && fabs(A_p_QA(1)) < 0.01) // 0.04
     {
@@ -336,12 +335,12 @@ void SbsController::state_swiching()
       removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
       solver().addTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
+      lipmTask->setCtrlMode(ctrl_mode);
       W_R_B_ref = W_R_B;
     }
   }
   else if (ctrl_mode == 2)
   {
-    ctrl_mode2 = 0;
     timer_mode += timeStep;
 
     if ((timer_mode > 1.0) && B_f_B(2) > 10.0)
@@ -349,25 +348,35 @@ void SbsController::state_swiching()
       ctrl_mode = 3;
       timer_mode = 0;
 
+      addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
       solver().removeTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
+      lipmTask->setCtrlMode(ctrl_mode);
+      lipmTask->copAdmittance({0.012, 0.012});
     }
   }
   else if (ctrl_mode == 3)
   {
-    if (rightFootLift_)
+    if (B_Q_B.norm() < 0.03)
+      timer_mode += timeStep;
+    else
+      timer_mode = 0;
+
+    if (timer_mode > 0.1)
     {
       ctrl_mode = 0;
+      timer_mode = 0;
+      lipmTask->setCtrlMode(ctrl_mode);
+      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
+      lipmTask->copAdmittance({0.008, 0.008});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
     }
-    // lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
   }
   else if (ctrl_mode == 5)
   {
     Vector3d B_p_QB;
     B_p_QB = W_R_B.transpose() * (Q_epd - W_p_BW);
-    ctrl_mode2 = 1;
     if (fabs(B_p_QB(0)) < 0.01 && fabs(B_p_QB(1)) < 0.01)
     {
       ctrl_mode = 6;
@@ -376,37 +385,47 @@ void SbsController::state_swiching()
       removeContact({robot().name(), "ground", "LeftFoot", "AllGround"});
       solver().addTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Right});
+      lipmTask->setCtrlMode(ctrl_mode);
       W_R_A_ref = W_R_A;
     }
   }
   else if (ctrl_mode == 6)
   {
-    ctrl_mode2 = 1;
     timer_mode += timeStep;
     if ((timer_mode > 1.0) && A_f_A(2) > 10.0)
     {
       ctrl_mode = 7;
       timer_mode = 0;
 
+      addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
       solver().removeTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
+      lipmTask->setCtrlMode(ctrl_mode);
+      lipmTask->copAdmittance({0.012, 0.012});
     }
   }
   else if (ctrl_mode == 7)
   {
-    if (rightFootLift_)
+    if (A_Q_A.norm() < 0.03)
+      timer_mode += timeStep;
+
+    if (timer_mode > 0.1)
     {
       ctrl_mode = 0;
+      timer_mode = 0;
+      lipmTask->setCtrlMode(ctrl_mode);
+      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
+      lipmTask->copAdmittance({0.008, 0.008});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
     }
-    // lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
   }
   else if (ctrl_mode == 0 && W_pos_B(2) - W_p_BW_(2) > 1e-2)
   {
     ctrl_mode2 = 0;
 
     ctrl_mode = 1;
+    lipmTask->setCtrlMode(ctrl_mode);
     Q_ref = W_p_AW;
     Q_ref(2) += HEIGHTREF;
   }
@@ -415,6 +434,7 @@ void SbsController::state_swiching()
     ctrl_mode2 = 1;
 
     ctrl_mode = 5;
+    lipmTask->setCtrlMode(ctrl_mode);
     Q_ref = W_p_BW;
     Q_ref(2) += HEIGHTREF;
   }
@@ -639,5 +659,3 @@ void SbsController::createGUI()
 }
 
 CONTROLLER_CONSTRUCTOR("SbsController", SbsController)
-
-

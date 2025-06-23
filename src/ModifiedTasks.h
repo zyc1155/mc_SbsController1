@@ -49,6 +49,8 @@ namespace mc_tasks
              */
             void run();
 
+            void setCtrlMode(int ctrl_mode);
+
         private:
             /**
              * @brief Add contact to the task (set tasks target, update support area).
@@ -197,6 +199,8 @@ namespace mc_tasks
                                         Eigen::Vector3d &moment) const;
 
         protected:
+            int ctrl_mode_;
+            Eigen::Vector2d targetSwingZMP;
             void update(mc_solver::QPSolver &) override;
         };
 

@@ -78,6 +78,8 @@ namespace mc_tasks
 
         StabilizerTask_Zyc::StabilizerTask_Zyc(const mc_rbdyn::Robots &robots, const mc_rbdyn::Robots &realRobots, unsigned int robotIndex, const std::string &leftSurface, const std::string &rightSurface, const std::string &torsoBodyName, double dt) : StabilizerTask(robots, realRobots, robotIndex, leftSurface, rightSurface, torsoBodyName, dt)
         {
+            ctrl_mode_ = 0;
+            targetSwingZMP.setZero();
         }
 
         void StabilizerTask_Zyc::run()
@@ -166,6 +168,15 @@ namespace mc_tasks
 
             auto endTime = clock::now();
             runTime_ = 1000. * duration_cast<duration<double>>(endTime - startTime).count();
+        }
+
+        void StabilizerTask_Zyc::setCtrlMode(int ctrl_mode)
+        {
+            ctrl_mode_ = ctrl_mode;
+            // for (auto contactTask : contactTasks)
+            // {
+            //     mc_rtc::log::success("Admittance gains: {}", contactTask->admittance());
+            // }
         }
 
         void StabilizerTask_Zyc::addContact(ContactState contactState, const Contact &contact)
@@ -511,10 +522,19 @@ namespace mc_tasks
 
             constexpr unsigned NB_VAR = 6 + 6;
             constexpr unsigned COST_DIM = 6 + NB_VAR + 1;
+            constexpr unsigned COST_DIM_ZYC = COST_DIM + 2;
             Eigen::MatrixXd A;
             Eigen::VectorXd b;
-            A.setZero(COST_DIM, NB_VAR);
-            b.setZero(COST_DIM);
+            if (ctrl_mode_ == 3 || ctrl_mode_ == 7)
+            {
+                A.setZero(COST_DIM_ZYC, NB_VAR);
+                b.setZero(COST_DIM_ZYC);
+            }
+            else
+            {
+                A.setZero(COST_DIM, NB_VAR);
+                b.setZero(COST_DIM);
+            }
 
             // |w_l_zmp + w_r_zmp - desiredWrench|^2
             // We handle moments around the ZMP instead of the world origin to avoid numerical errors due to large moment values.
@@ -549,6 +569,23 @@ namespace mc_tasks
             // b_rankle = 0
             A_pressure *= c_.fdqpWeights.pressureSqrt;
             // b_pressure = 0
+
+            if (ctrl_mode_ == 3)
+            {
+                auto A_rcop = A.block<2, 6>(19, 6);
+                A_rcop << 1, 0, 0, 0, 0, -targetSwingZMP.y(),
+                    0, 1, 0, 0, 0, targetSwingZMP.x();
+                A_rcop *= X_0_rc.dualMatrix();
+                A_rcop *= 50;
+            }
+            else if (ctrl_mode_ == 7)
+            {
+                auto A_lcop = A.block<2, 6>(19, 0);
+                A_lcop << 1, 0, 0, 0, 0, -targetSwingZMP.y(),
+                    0, 1, 0, 0, 0, targetSwingZMP.x();
+                A_lcop *= X_0_lc.dualMatrix();
+                A_lcop *= 50;
+            }
 
             Eigen::MatrixXd Q = A.transpose() * A;
             Eigen::VectorXd c = -A.transpose() * b;
