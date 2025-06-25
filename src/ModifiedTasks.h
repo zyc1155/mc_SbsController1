@@ -94,17 +94,20 @@ namespace mc_tasks
             void distributeWrench(const sva::ForceVecd &desiredWrench);
 
             /**
+   /**
    * @brief Generate a CoP reference for each contact under the future zmp refence along a horizon.
-   * The dynamic of the contact CoPreference zmp is expected to follow a 1st order dynamic w.r.t the CoP reference
    * The dynamic of the contact CoP is expected to follow a 1st order dynamic w.r.t the CoP reference using prameter
    * lambda_CoP
    *
-   * @param zmp_ref  each zmp reference piecewise constant over duration/zmp_ref vector lenght in the world frame
+   * The desired vertical forces are computed using the ratio (p_left - zmp_ref) / (p_left - p_right).
+   * This choice limits the torque at each contact ankle
+   *
+   * It is advised to provide the future support foot name when using this method using supportFoot method
+   *
+   * @param zmp_ref  each zmp reference piecewise constant over delta vector lenght in the world frame
    * @param delta horizon timestep
    */
-  void distributeCoPonHorizon(const sva::ForceVecd & desiredWrench,
-                              const std::vector<Eigen::Vector2d> & zmp_ref,const std::vector<Eigen::Vector2d> & u_ref,
-                              const double delta);
+  void distributeCoPonHorizon(const std::vector<Eigen::Vector2d> & zmp_ref, double delta);
 
             /** Project desired wrench to single support foot.
              *
