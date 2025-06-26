@@ -23,8 +23,8 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   //  Vector6d dof =  Vector6d::Zero();
   // dof(2) = 1.0;
 
-  // addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
-  // addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
+  addContact({robot().name(), "ground", "LeftFoot", "AllGround", 0.7, dof});
+  addContact({robot().name(), "ground", "RightFoot", "AllGround", 0.7, dof});
 
   postureTask->stiffness(10.0);
   postureTask->weight(1000.0);
@@ -94,16 +94,15 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   }
 
   first = true;
-  // fp = fopen("/home/zyc/data.csv", "w");
 
-  // leftFootRatio = 0.5;
-  // datastore().make_call("KinematicAnchorFrame::" + robot().name(),
-  //                       [this](const mc_rbdyn::Robot &robot)
-  //                       {
-  //                         return sva::interpolate(robot.surfacePose("RightFoot"),
-  //                                                 robot.surfacePose("LeftFoot"),
-  //                                                 leftFootRatio);
-  //                       });
+  leftFootRatio = 0.5;
+  datastore().make_call("KinematicAnchorFrame::" + robot().name(),
+                        [this](const mc_rbdyn::Robot &robot)
+                        {
+                          return sva::interpolate(robot.surfacePose("RightFoot"),
+                                                  robot.surfacePose("LeftFoot"),
+                                                  leftFootRatio);
+                        });
 
   createGUI();
 
