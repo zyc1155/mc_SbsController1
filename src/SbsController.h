@@ -34,7 +34,6 @@ struct SbsController_DLLAPI SbsController : public mc_control::MCController
   void state_swiching();
   void set_desiredVel();
   void set_desiredTask();
-  void output_data();
 
   Vector3d sat_func(double lim, const Vector3d &val);
   sva::ForceVecd error_func(const sva::ForceVecd &f_m);
@@ -48,7 +47,7 @@ private:
 
   // std::shared_ptr<mc_tasks::OrientationTask> otTask;
   std::shared_ptr<mc_tasks::EndEffectorTask_NoGUI> efTask_left, efTask_right;
-  std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask_Zyc> lipmTask;
+  std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask> lipmTask;
 
   FILE *fp;
   bool first;

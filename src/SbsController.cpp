@@ -48,7 +48,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   stabiConf.dcmDerivatorTimeConstant = 5;
   stabiConf.dcmIntegratorTimeConstant = 5; // 5.0
 
-  lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask_Zyc>(
+  lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask>(
       solver().robots(),
       solver().realRobots(),
       0,
@@ -335,7 +335,6 @@ void SbsController::state_swiching()
       removeContact({robot().name(), "ground", "RightFoot", "AllGround"});
       solver().addTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
-      lipmTask->setCtrlMode(ctrl_mode);
       W_R_B_ref = W_R_B;
     }
   }
@@ -345,33 +344,20 @@ void SbsController::state_swiching()
 
     if ((timer_mode > 1.0) && B_f_B(2) > 10.0)
     {
-      ctrl_mode = 3;
+      ctrl_mode = 0;
       timer_mode = 0;
 
       addContact({robot().name(), "ground", "RightFoot", "AllGround", 1.0, dof});
       solver().removeTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-      lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->copAdmittance({0.012, 0.012});
+
+      Q_ref = (W_p_AW + W_p_BW) / 2.0;
+      Q_ref(2) += HEIGHTREF;
     }
   }
   else if (ctrl_mode == 3)
   {
-    if (B_Q_B.norm() < 0.03)
-      timer_mode += timeStep;
-    else
-      timer_mode = 0;
 
-    if (timer_mode > 0.1)
-    {
-      ctrl_mode = 0;
-      timer_mode = 0;
-      lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-      lipmTask->copAdmittance({0.008, 0.008});
-      Q_ref = (W_p_AW + W_p_BW) / 2.0;
-      Q_ref(2) += HEIGHTREF;
-    }
   }
   else if (ctrl_mode == 5)
   {
@@ -385,7 +371,6 @@ void SbsController::state_swiching()
       removeContact({robot().name(), "ground", "LeftFoot", "AllGround"});
       solver().addTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Right});
-      lipmTask->setCtrlMode(ctrl_mode);
       W_R_A_ref = W_R_A;
     }
   }
@@ -394,38 +379,25 @@ void SbsController::state_swiching()
     timer_mode += timeStep;
     if ((timer_mode > 1.0) && A_f_A(2) > 10.0)
     {
-      ctrl_mode = 7;
+      ctrl_mode = 0;
       timer_mode = 0;
 
       addContact({robot().name(), "ground", "LeftFoot", "AllGround", 1.0, dof});
       solver().removeTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-      lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->copAdmittance({0.012, 0.012});
+
+      Q_ref = (W_p_AW + W_p_BW) / 2.0;
+      Q_ref(2) += HEIGHTREF;
     }
   }
   else if (ctrl_mode == 7)
   {
-    if (A_Q_A.norm() < 0.03)
-      timer_mode += timeStep;
-
-    if (timer_mode > 0.1)
-    {
-      ctrl_mode = 0;
-      timer_mode = 0;
-      lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-      lipmTask->copAdmittance({0.008, 0.008});
-      Q_ref = (W_p_AW + W_p_BW) / 2.0;
-      Q_ref(2) += HEIGHTREF;
-    }
   }
   else if (ctrl_mode == 0 && W_pos_B(2) - W_p_BW_(2) > 1e-2)
   {
     ctrl_mode2 = 0;
 
     ctrl_mode = 1;
-    lipmTask->setCtrlMode(ctrl_mode);
     Q_ref = W_p_AW;
     Q_ref(2) += HEIGHTREF;
   }
@@ -434,7 +406,6 @@ void SbsController::state_swiching()
     ctrl_mode2 = 1;
 
     ctrl_mode = 5;
-    lipmTask->setCtrlMode(ctrl_mode);
     Q_ref = W_p_BW;
     Q_ref(2) += HEIGHTREF;
   }
@@ -526,61 +497,6 @@ void SbsController::set_desiredTask()
   }
 }
 
-void SbsController::output_data()
-{
-  fprintf(fp, "%.3lf,", ttime);
-
-  fprintf(fp, ",%d,%d,", ctrl_mode, ctrl_mode2);
-
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", Q_ref(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", Q_epd(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", Q_ep(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", W_Q_W(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", W_p_GW_ref(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", W_p_GW(i));
-
-  // fprintf(fp, ",");
-  // for (int i = 0; i < 3; i++)
-  //   fprintf(fp, ",%.6lf", W_v_GWd(i));
-
-  // fprintf(fp, ",");
-  // for (int i = 0; i < 3; i++)
-  //   fprintf(fp, ",%.6lf", W_v_GW(i));
-
-  // fprintf(fp, ",");
-  // for (int i = 0; i < 3; i++)
-  //   fprintf(fp, ",%.6lf", W_a_GWd(i));
-
-  // fprintf(fp, ",");
-  // for (int i = 0; i < 3; i++)
-  //   fprintf(fp, ",%.6lf", W_a_GW(i));
-
-  // for (int i = 0; i < 3; i++)
-  // {
-  //   for(int j = 0; j < 3; j++)
-  //   {
-  //     fprintf(fp, ",%.6lf", A_R_B(i,j));
-  //   }
-  //   fprintf(fp, "\n");
-  // }
-  fprintf(fp, "\n");
-}
 
 Vector3d SbsController::sat_func(double _lim, const Vector3d &val)
 {
