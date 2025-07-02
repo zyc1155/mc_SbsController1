@@ -40,7 +40,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
   stabiConf.comHeight = HEIGHTREF;
   stabiConf.torsoPitch = 0;
-  stabiConf.copAdmittance = Vector2d{0.008, 0.008}; // 0.008, 0.008
+  stabiConf.copAdmittance = Vector2d{0.01, 0.01}; // 0.008, 0.008
   stabiConf.zmpcc.comAdmittance = Vector2d{0.0, 0.0};
   stabiConf.dcmPropGain = 2.0; // 2.0;
   stabiConf.dcmIntegralGain = 15;
@@ -62,7 +62,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
   solver().addTask(lipmTask);
 
-  ttime = 0;
+  // ttime = 0;
 
   ctrl_mode = 0;
   ctrl_mode2 = 0;
@@ -94,16 +94,15 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   }
 
   first = true;
-  // fp = fopen("/home/zyc/data.csv", "w");
 
-  // leftFootRatio = 0.5;
-  // datastore().make_call("KinematicAnchorFrame::" + robot().name(),
-  //                       [this](const mc_rbdyn::Robot &robot)
-  //                       {
-  //                         return sva::interpolate(robot.surfacePose("RightFoot"),
-  //                                                 robot.surfacePose("LeftFoot"),
-  //                                                 leftFootRatio);
-  //                       });
+  leftFootRatio = 0.5;
+  datastore().make_call("KinematicAnchorFrame::" + robot().name(),
+                        [this](const mc_rbdyn::Robot &robot)
+                        {
+                          return sva::interpolate(robot.surfacePose("RightFoot"),
+                                                  robot.surfacePose("LeftFoot"),
+                                                  leftFootRatio);
+                        });
 
   createGUI();
 
@@ -148,17 +147,16 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 bool SbsController::run()
 {
 
-  if (first)
-  {
-    z_start = std::chrono::high_resolution_clock::now();
-  }
-  ttime = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - z_start).count();
+  // if (first)
+  // {
+  //   z_start = std::chrono::high_resolution_clock::now();
+  // }
+  // ttime = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - z_start).count();
   get_values();
   set_CtrlPos();
   state_swiching();
   set_desiredVel();
   set_desiredTask();
-  // output_data();
 
   if (first)
     first = false;
@@ -295,13 +293,6 @@ void SbsController::get_values()
 void SbsController::set_CtrlPos()
 {
 
-  // posRB_ = right_falcon.Get_Pos();
-  // posRA_ = left_falcon.Get_Pos();
-
-  // posRB << -(posRB_(2) - 0.12), -posRB_(0), posRB_(1);
-  // posRA << -(posRA_(2) - 0.12), -posRA_(0), posRA_(1);
-  // posRB << .0, .0, .0;
-  // posRA << .0, .0, .0;
 
   if (first)
   {
@@ -336,6 +327,7 @@ void SbsController::state_swiching()
       solver().addTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
       lipmTask->setCtrlMode(ctrl_mode);
+      lipmTask->copAdmittance({0.006, 0.006});
       W_R_B_ref = W_R_B;
     }
   }
@@ -352,7 +344,7 @@ void SbsController::state_swiching()
       solver().removeTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->copAdmittance({0.012, 0.012});
+      lipmTask->copAdmittance({0.01, 0.01});
     }
   }
   else if (ctrl_mode == 3)
@@ -368,7 +360,6 @@ void SbsController::state_swiching()
       timer_mode = 0;
       lipmTask->setCtrlMode(ctrl_mode);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-      lipmTask->copAdmittance({0.008, 0.008});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
     }
@@ -386,6 +377,7 @@ void SbsController::state_swiching()
       solver().addTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Right});
       lipmTask->setCtrlMode(ctrl_mode);
+      lipmTask->copAdmittance({0.006, 0.006});
       W_R_A_ref = W_R_A;
     }
   }
@@ -401,7 +393,7 @@ void SbsController::state_swiching()
       solver().removeTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->copAdmittance({0.012, 0.012});
+      lipmTask->copAdmittance({0.01, 0.01});
     }
   }
   else if (ctrl_mode == 7)
@@ -415,7 +407,6 @@ void SbsController::state_swiching()
       timer_mode = 0;
       lipmTask->setCtrlMode(ctrl_mode);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
-      lipmTask->copAdmittance({0.008, 0.008});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
     }
@@ -526,61 +517,6 @@ void SbsController::set_desiredTask()
   }
 }
 
-void SbsController::output_data()
-{
-  fprintf(fp, "%.3lf,", ttime);
-
-  fprintf(fp, ",%d,%d,", ctrl_mode, ctrl_mode2);
-
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", Q_ref(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", Q_epd(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", Q_ep(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", W_Q_W(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", W_p_GW_ref(i));
-
-  fprintf(fp, ",");
-  for (int i = 0; i < 3; i++)
-    fprintf(fp, ",%.6lf", W_p_GW(i));
-
-  // fprintf(fp, ",");
-  // for (int i = 0; i < 3; i++)
-  //   fprintf(fp, ",%.6lf", W_v_GWd(i));
-
-  // fprintf(fp, ",");
-  // for (int i = 0; i < 3; i++)
-  //   fprintf(fp, ",%.6lf", W_v_GW(i));
-
-  // fprintf(fp, ",");
-  // for (int i = 0; i < 3; i++)
-  //   fprintf(fp, ",%.6lf", W_a_GWd(i));
-
-  // fprintf(fp, ",");
-  // for (int i = 0; i < 3; i++)
-  //   fprintf(fp, ",%.6lf", W_a_GW(i));
-
-  // for (int i = 0; i < 3; i++)
-  // {
-  //   for(int j = 0; j < 3; j++)
-  //   {
-  //     fprintf(fp, ",%.6lf", A_R_B(i,j));
-  //   }
-  //   fprintf(fp, "\n");
-  // }
-  fprintf(fp, "\n");
-}
 
 Vector3d SbsController::sat_func(double _lim, const Vector3d &val)
 {

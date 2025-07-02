@@ -34,8 +34,7 @@ struct SbsController_DLLAPI SbsController : public mc_control::MCController
   void state_swiching();
   void set_desiredVel();
   void set_desiredTask();
-  void output_data();
-
+  
   Vector3d sat_func(double lim, const Vector3d &val);
   sva::ForceVecd error_func(const sva::ForceVecd &f_m);
 

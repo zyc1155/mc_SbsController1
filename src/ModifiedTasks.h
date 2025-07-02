@@ -107,7 +107,7 @@ namespace mc_tasks
    * @param zmp_ref  each zmp reference piecewise constant over delta vector lenght in the world frame
    * @param delta horizon timestep
    */
-  void distributeCoPonHorizon(const std::vector<Eigen::Vector2d> & zmp_ref, double delta);
+            void distributeCoPonHorizon(const std::vector<Eigen::Vector2d> &zmp_ref, double delta);
 
             /** Project desired wrench to single support foot.
              *

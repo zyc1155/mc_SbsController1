@@ -1,33 +1,18 @@
 ---
 ObserverPipelines:
-- name: MainPipeline                     # - Create a new pipeline
-  gui: true                              #   diplay the pipeline in the GUI (default = false)
-  log: true                              #   log observers (default)
-
-  observers:                             #   declare which observers to use
-  - type: Encoder                        # - Use an EncoderObserver
-    config:                              #
-      position: encoderValues            #    - Sets joint position from encoder sensor values (default)
-      velocity: encoderFiniteDifferences #    - Computes joint velocities by finite differences  (default)
-                                         # We now have the estimation of each joint position and velocity and the corresponding
-                                         # body positions and velocities, but we are still missing the floating base
-
-  - type: BodySensor                     # - Use a BodySensor observer
-    update: true                         #   Do not update the real robot state
-    gui: false                           #   Do not display in the gui
-    config:                              #
-      bodySensor: FloatingBase           #   In simulation, the interface will fill this sensor with ground truth values
-                                         #   The observer computes the position and velocity of the floating base
-                                         #   by transforming the sensor measurements to the floating base frame
-  
-  - type: KinematicInertial              # - Estimates the floating base state using the KinematicInertial observer
-    update: false                        #   update the real robot instance from its results
-    gui: false                           #   Displays the estimated velocity as an arrow (default)
-    config:
-      imuBodySensor: Accelerometer       # This observer only uses roll and pitch rotation information from this sensor
-                                         # along with a kinematic anchor point and the robot kinematics between the anchor
-                                         # frame and the floating base frame. The anchor frame is expected to be provided
-                                         # through a datastore callback (see below for details)
+  name: MainObserverPipeline
+  gui: true
+  observers:
+    - type: Encoder
+    - type: Attitude
+    - type: KinematicInertial
+      config:
+        anchorFrame:
+          maxAnchorFrameDiscontinuity: 0.05 # [m]
+    - type: BodySensor
+      update: true
+      config:
+        bodySensor: FloatingBase
 
 constraints:
   - type: kinematics
