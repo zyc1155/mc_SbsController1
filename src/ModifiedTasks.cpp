@@ -146,7 +146,7 @@ namespace mc_tasks
             }
             distribZMP_ = mc_rbdyn::zmp(distribWrench_, zmpFrame_);
 
-            // updateCoMTaskZMPCC();
+            updateCoMTaskZMPCC();
             updateFootForceDifferenceControl();
 
             comTask->com(comTarget_);
