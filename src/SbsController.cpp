@@ -92,6 +92,14 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
 
     COMShifter_Kd(i, i) = COMShifter_Kp(i, i) / omega + omega;
   }
+  // for new trajectory
+  direction << 0, 0, 1;
+  limit_vel = 0.4;
+  limit_acc = 0.45;
+  limit_jerk = 8;
+
+  kp_dcm = 30;
+  kd_dcm = 2 * sqrt(kp_dcm);
 
   first = true;
 
@@ -293,7 +301,6 @@ void SbsController::get_values()
 void SbsController::set_CtrlPos()
 {
 
-
   if (first)
   {
     posRAp = posRA;
@@ -362,6 +369,9 @@ void SbsController::state_swiching()
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
+
+      if ((Q_ref - W_p_GW_ref).norm() > 1e-6)
+        direction = (Q_ref - W_p_GW_ref).normalized();
     }
   }
   else if (ctrl_mode == 5)
@@ -409,6 +419,9 @@ void SbsController::state_swiching()
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       Q_ref = (W_p_AW + W_p_BW) / 2.0;
       Q_ref(2) += HEIGHTREF;
+
+      if ((Q_ref - W_p_GW_ref).norm() > 1e-6)
+        direction = (Q_ref - W_p_GW_ref).normalized();
     }
   }
   else if (ctrl_mode == 0 && W_pos_B(2) - W_p_BW_(2) > 1e-2)
@@ -419,6 +432,9 @@ void SbsController::state_swiching()
     lipmTask->setCtrlMode(ctrl_mode);
     Q_ref = W_p_AW;
     Q_ref(2) += HEIGHTREF;
+
+    if ((Q_ref - W_p_GW_ref).norm() > 1e-6)
+      direction = (Q_ref - W_p_GW_ref).normalized();
   }
   else if (ctrl_mode == 0 && W_pos_A(2) - W_p_AW_(2) > 1e-2)
   {
@@ -428,6 +444,9 @@ void SbsController::state_swiching()
     lipmTask->setCtrlMode(ctrl_mode);
     Q_ref = W_p_BW;
     Q_ref(2) += HEIGHTREF;
+
+    if ((Q_ref - W_p_GW_ref).norm() > 1e-6)
+      direction = (Q_ref - W_p_GW_ref).normalized();
   }
 }
 
@@ -440,23 +459,11 @@ void SbsController::set_desiredVel()
     Q_ref = (W_p_AW + W_p_BW) / 2.0;
     Q_ref(2) += HEIGHTREF;
     W_p_GW_ref = W_p_GW;
-    W_p_GWd = W_p_GW_ref;
-    W_a_GWdp = Vector3d::Zero();
+    if ((Q_ref - W_p_GW_ref).norm() > 1e-6)
+      direction = (Q_ref - W_p_GW_ref).normalized();
   }
 
-  W_a_GW_ref = sat_func(A_LIM, COMShifter_Kp * (Q_ref - W_p_GW_ref) - COMShifter_Kd * W_v_GW_ref);
-  jerk = sat_func(8.0, (W_a_GW_ref - W_a_GWdp) / timeStep);
-  W_a_GW_ref = W_a_GWdp + jerk * timeStep;
-  W_a_GWdp = W_a_GW_ref;
-
-  W_v_GW_ref += W_a_GW_ref * timeStep;
-  W_p_GW_ref += W_v_GW_ref * timeStep;
-
-  // double zyc_kp = 10.0;
-
-  // W_a_GWd = zyc_kp * (W_p_GW_ref - W_p_GW) + 2* 0.6 * sqrt(zyc_kp) * (W_v_GW_ref - W_v_GW);
-  // W_v_GWd += W_a_GWd * timeStep;
-  // W_p_GWd += W_v_GWd * timeStep;
+  cal_motion(Q_ref, W_p_GW_ref, W_v_GW_ref, W_a_GW_ref, direction);
 
   Q_epd = W_p_GW_ref - W_a_GW_ref / (omega * omega);
   Q_epd(2) = Q_epd(2) - HEIGHTREF;
@@ -517,7 +524,6 @@ void SbsController::set_desiredTask()
   }
 }
 
-
 Vector3d SbsController::sat_func(double _lim, const Vector3d &val)
 {
   double lim = fabs(_lim);
@@ -534,6 +540,19 @@ Vector3d SbsController::sat_func(double _lim, const Vector3d &val)
   }
 
   return result;
+}
+
+double SbsController::sat_func(double lim, double val)
+{
+  double res;
+  if (val > lim)
+    res = lim;
+  else if (val < -lim)
+    res = -lim;
+  else
+    res = val;
+
+  return res;
 }
 
 sva::ForceVecd SbsController::error_func(const sva::ForceVecd &f_m)
@@ -592,6 +611,29 @@ void SbsController::createGUI()
                     mc_rtc::gui::Point3D("Point_Right", [this]()
                                          { return W_pos_B; }, [this](const Vector3d &pos)
                                          { W_pos_B = pos; }));
+}
+
+void SbsController::cal_motion(const Vector3d &target, const Vector3d &W_p_GW_0, const Vector3d &W_v_GW_0, const Vector3d &W_a_GW_0, const Vector3d &n)
+{
+  Vector3d alpha_state;
+  double alpha_jerk;
+  double alpha_traget = (target - W_p_GW_0).dot(n);
+
+  // alpha_state << 0, W_v_GW_0.dot(n), W_a_GW_0.dot(n);
+  // alpha_jerk = sat_func(limit_jerk, kp_dcm * (alpha_traget - alpha_state(0)) - (kp_dcm / omega + kd_dcm) * alpha_state(1) - (kd_dcm / omega + 1) * alpha_state(2));
+  // // alpha_jerk = sat_func(limit_jerk, kp_dcm * alpha_state(0) + (kp_dcm / omega + kd_dcm) * alpha_state(1) + (kd_dcm / omega - 1) * alpha_state(2));
+  // alpha_state(2) = sat_func(limit_acc, alpha_state(2) + alpha_jerk * timeStep);
+  // alpha_state(1) = sat_func(limit_vel, alpha_state(1) + alpha_state(2) * timeStep);
+  // alpha_state(0) = alpha_state(0) + alpha_state(1) * timeStep;
+
+  alpha_state << 0, W_v_GW_0.dot(n), W_a_GW_0.dot(n);
+  alpha_state(2) = sat_func(limit_acc, kp_dcm * alpha_traget - (kp_dcm / omega + omega) * alpha_state(1));
+  alpha_state(1) = sat_func(limit_vel, alpha_state(1) + alpha_state(2) * timeStep);
+  alpha_state(0) = alpha_state(0) + alpha_state(1) * timeStep;
+
+  W_p_GW_ref = W_p_GW_0 + alpha_state(0) * n;
+  W_v_GW_ref = alpha_state(1) * n;
+  W_a_GW_ref = alpha_state(2) * n;
 }
 
 CONTROLLER_CONSTRUCTOR("SbsController", SbsController)

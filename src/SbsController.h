@@ -19,8 +19,6 @@ const double GRAVITY = 9.8;
 const double HEIGHTREF = 0.9;
 const double A_LIM = 0.45;
 
-
-
 struct SbsController_DLLAPI SbsController : public mc_control::MCController
 {
   SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rtc::Configuration &config);
@@ -34,8 +32,9 @@ struct SbsController_DLLAPI SbsController : public mc_control::MCController
   void state_swiching();
   void set_desiredVel();
   void set_desiredTask();
-  
+
   Vector3d sat_func(double lim, const Vector3d &val);
+  double sat_func(double lim, double val);
   sva::ForceVecd error_func(const sva::ForceVecd &f_m);
 
 protected:
@@ -57,6 +56,15 @@ private:
   int ctrl_mode, ctrl_mode2;
   std::chrono::_V2::system_clock::time_point z_start;
   Matrix3d COMShifter_Kp, COMShifter_Kd;
+
+  // for new trajectory
+  Vector3d direction;
+
+  double limit_vel, limit_acc, limit_jerk;
+
+  double kp_dcm, kd_dcm;
+  void cal_motion(const Vector3d &target, const Vector3d &W_p_GW_0, const Vector3d &W_v_GW_0, const Vector3d &W_a_GW_0, const Vector3d &n);
+  //
 
   Vector3d W_pos_A, W_pos_B;
   Vector3d posRA_, posRB_;
