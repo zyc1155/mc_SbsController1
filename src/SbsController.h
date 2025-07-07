@@ -16,7 +16,7 @@ using Eigen::Vector6d;
 using Eigen::VectorXd;
 
 const double GRAVITY = 9.8;
-const double HEIGHTREF = 0.9;
+const double HEIGHTREF = 0.95;
 const double A_LIM = 0.45;
 
 struct SbsController_DLLAPI SbsController : public mc_control::MCController
@@ -35,7 +35,6 @@ struct SbsController_DLLAPI SbsController : public mc_control::MCController
 
   Vector3d sat_func(double lim, const Vector3d &val);
   double sat_func(double lim, double val);
-  sva::ForceVecd error_func(const sva::ForceVecd &f_m);
 
 protected:
   void createGUI();
@@ -56,6 +55,7 @@ private:
   int ctrl_mode, ctrl_mode2;
   std::chrono::_V2::system_clock::time_point z_start;
   Matrix3d COMShifter_Kp, COMShifter_Kd;
+  double copAdmittance_ds, copAdmittance_ss;
 
   // for new trajectory
   Vector3d direction;
@@ -75,9 +75,9 @@ private:
   Matrix3d R_0_mIMU;
   Matrix3d W_R_A, W_R_B, W_R_H;
   Matrix3d W_R_B_ref, W_R_A_ref;
-  Vector3d A_p_BA_ref, B_p_AB_ref, W_p_GW_ref, W_p_GWd;
+  Vector3d A_p_BA_ref, B_p_AB_ref, W_p_GW_ref;
   sva::PTransformd A_T_BA_d, B_T_AB_d;
-  Vector3d W_v_GW, W_v_GWd, W_a_GW, W_a_GWd, W_v_GW_p, W_v_GW_ref, W_a_GW_ref, W_a_GWdp;
+  Vector3d W_v_GW, W_a_GW, W_v_GW_p, W_v_GW_ref, W_a_GW_ref;
 
   Vector3d A_f_A, B_f_B, A_n_A, B_n_B, W_f_A, W_f_B, W_n_A, W_n_B;
 

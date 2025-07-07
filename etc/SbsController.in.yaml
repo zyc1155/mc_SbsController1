@@ -9,10 +9,10 @@ ObserverPipelines:
       config:
         anchorFrame:
           maxAnchorFrameDiscontinuity: 0.05 # [m]
-    - type: BodySensor
-      update: true
-      config:
-        bodySensor: FloatingBase
+    # - type: BodySensor
+    #   update: true
+    #   config:
+    #     bodySensor: FloatingBase
 
 constraints:
   - type: kinematics

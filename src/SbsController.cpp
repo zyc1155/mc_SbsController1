@@ -37,14 +37,17 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   efTask_left->selectActiveJoints(solver(), activeJoints);
   efTask_right->selectActiveJoints(solver(), activeJoints);
 
+  copAdmittance_ss=0.004;
+  copAdmittance_ds=0.008;
+  
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
   stabiConf.comHeight = HEIGHTREF;
   stabiConf.torsoPitch = 0;
-  stabiConf.copAdmittance = Vector2d{0.01, 0.01}; // 0.008, 0.008
+  stabiConf.copAdmittance = Vector2d::Constant(copAdmittance_ds);
   stabiConf.zmpcc.comAdmittance = Vector2d{0.0, 0.0};
-  stabiConf.dcmPropGain = 2.0; // 2.0;
-  stabiConf.dcmIntegralGain = 15;
-  stabiConf.dcmDerivGain = 0.5;
+  stabiConf.dcmPropGain = 4.0; // 2.0;
+  stabiConf.dcmIntegralGain = 15;// 15
+  stabiConf.dcmDerivGain = 0.25;
   stabiConf.dcmDerivatorTimeConstant = 5;
   stabiConf.dcmIntegratorTimeConstant = 5; // 5.0
 
@@ -80,7 +83,6 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   // W_pos_A =
 
   W_v_GW_ref = Vector3d::Zero();
-  W_v_GWd = Vector3d::Zero();
   Q_epd = Vector3d::Zero();
   omega = sqrt(GRAVITY / HEIGHTREF);
   COMShifter_Kp = Matrix3d::Zero();
@@ -126,20 +128,20 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
       { return W_p_AW_; },
       "right_foot_a", [this]()
       { return W_p_BW_; },
-      "ref_COM", [this]()
+      "COM_ref_p", [this]()
       { return W_p_GW_ref; },
-      "real_COM_p", [this]()
+      "COM_ref_v", [this]()
+      { return W_v_GW_ref; },
+      "COM_ref_a", [this]()
+      { return W_a_GW_ref; },
+      "COM_real_p", [this]()
       { return W_p_GW; },
-      "real_COM_v", [this]()
+      "COM_real_v", [this]()
       { return W_v_GW; },
-      "real_COM_a", [this]()
+      "COM_real_a", [this]()
       { return W_a_GW; },
       "ZMP_total", [this]()
       { return W_Q_W; },
-      "ZMP_L", [this]()
-      { return A_Q_A; },
-      "ZMP_R", [this]()
-      { return B_Q_B; },
       "COP_L", [this]()
       { return A_Q_A; },
       "COP_R", [this]()
@@ -182,7 +184,6 @@ void SbsController::reset(const mc_control::ControllerResetData &reset_data)
 void SbsController::get_values()
 {
   sva::PTransformd ZMP_frame(Matrix3d::Identity(), Vector3d::Zero());
-  std::vector<std::string> activeJoints = {"LCY", "LCR", "LCP", "LKP", "LAP", "LAR", "RCY", "RCR", "RCP", "RKP", "RAP", "RAR"};
   std::vector<std::string> sensornames = {"LeftFootForceSensor", "RightFootForceSensor"};
 
   // left = realRobot().surfaceWrench("LeftFootCenter");
@@ -212,19 +213,31 @@ void SbsController::get_values()
   B_f_B = right.force();
   B_n_B = right.moment();
 
-  W_R_A = realRobot().surfacePose("LeftFootCenter").rotation();
-  W_p_AW = realRobot().surfacePose("LeftFootCenter").translation();
+  // W_R_A = realRobot().surfacePose("LeftFootCenter").rotation();
+  // W_p_AW = realRobot().surfacePose("LeftFootCenter").translation();
 
-  W_p_AW_ = realRobot().frame("Lleg_Link5").position().translation();
+  // W_p_AW_ = realRobot().frame("Lleg_Link5").position().translation();
 
-  W_R_B = realRobot().surfacePose("RightFootCenter").rotation();
-  W_p_BW = realRobot().surfacePose("RightFootCenter").translation();
+  // W_R_B = realRobot().surfacePose("RightFootCenter").rotation();
+  // W_p_BW = realRobot().surfacePose("RightFootCenter").translation();
 
-  W_p_BW_ = realRobot().frame("Rleg_Link5").position().translation();
+  // W_p_BW_ = realRobot().frame("Rleg_Link5").position().translation();
 
-  W_p_GW = realRobot().com();
+  // W_p_GW = realRobot().com();
   // W_v_GW = robot().comVelocity();
   // W_a_GW = robot().comAcceleration();
+
+  W_R_A = robot().surfacePose("LeftFootCenter").rotation();
+  W_p_AW = robot().surfacePose("LeftFootCenter").translation();
+
+  W_p_AW_ = robot().frame("Lleg_Link5").position().translation();
+
+  W_R_B = robot().surfacePose("RightFootCenter").rotation();
+  W_p_BW = robot().surfacePose("RightFootCenter").translation();
+
+  W_p_BW_ = robot().frame("Rleg_Link5").position().translation();
+
+  W_p_GW = realRobot().com();
   if (first)
   {
     W_pos_A = W_p_AW_;
@@ -334,7 +347,7 @@ void SbsController::state_swiching()
       solver().addTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left});
       lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->copAdmittance({0.006, 0.006});
+      lipmTask->copAdmittance(Vector2d::Constant(copAdmittance_ss));
       W_R_B_ref = W_R_B;
     }
   }
@@ -351,7 +364,7 @@ void SbsController::state_swiching()
       solver().removeTask(efTask_right);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->copAdmittance({0.01, 0.01});
+      lipmTask->copAdmittance(Vector2d::Constant(copAdmittance_ds));
     }
   }
   else if (ctrl_mode == 3)
@@ -387,7 +400,7 @@ void SbsController::state_swiching()
       solver().addTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Right});
       lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->copAdmittance({0.006, 0.006});
+      lipmTask->copAdmittance(Vector2d::Constant(copAdmittance_ss));
       W_R_A_ref = W_R_A;
     }
   }
@@ -403,7 +416,7 @@ void SbsController::state_swiching()
       solver().removeTask(efTask_left);
       lipmTask->setContacts({mc_tasks::lipm_stabilizer::ContactState::Left, mc_tasks::lipm_stabilizer::ContactState::Right});
       lipmTask->setCtrlMode(ctrl_mode);
-      lipmTask->copAdmittance({0.01, 0.01});
+      lipmTask->copAdmittance(Vector2d::Constant(copAdmittance_ds));
     }
   }
   else if (ctrl_mode == 7)
@@ -477,21 +490,12 @@ void SbsController::set_desiredVel()
     A_p_BA_ref(1) = -0.21 + posRB(1) * 5.0;
     A_p_BA_ref(2) = posRB(2) * 8.0;
 
-    // Dampling control
-    sva::ForceVecd d_delta = error_func(right);
-    sva::PTransformd delta(mc_rbdyn::rpyToMat(timeStep * d_delta.couple()), timeStep * d_delta.force());
-    A_T_BA_d = delta * sva::PTransformd(A_p_BA_ref);
   }
   else if (ctrl_mode2 == 1)
   {
     B_p_AB_ref(0) = posRA(0) * 10.0;
     B_p_AB_ref(1) = 0.21 + posRA(1) * 5.0;
     B_p_AB_ref(2) = posRA(2) * 8.0;
-
-    // Dampling control
-    sva::ForceVecd d_delta = error_func(left);
-    sva::PTransformd delta(mc_rbdyn::rpyToMat(timeStep * d_delta.couple()), timeStep * d_delta.force());
-    B_T_AB_d = delta * sva::PTransformd(B_p_AB_ref);
   }
 }
 
@@ -555,46 +559,6 @@ double SbsController::sat_func(double lim, double val)
   return res;
 }
 
-sva::ForceVecd SbsController::error_func(const sva::ForceVecd &f_m)
-{
-  Vector3d measure_, limit_f, limit_e, gain_;
-  Vector3d res[2];
-  for (int j = 0; j < 2; j++)
-  {
-    if (j == 0)
-    {
-      measure_ = f_m.couple();
-      limit_f = force_limit.couple();
-      limit_e = error_limit.couple();
-      gain_ = admittance.couple();
-    }
-    else
-    {
-      measure_ = f_m.force();
-      limit_f = force_limit.force();
-      limit_e = error_limit.force();
-      gain_ = admittance.force();
-    }
-
-    for (int i = 0; i < 3; i++)
-    {
-      if (measure_(i) > limit_f(i))
-      {
-        res[j](i) = gain_(i) * (measure_(i) - limit_f(i));
-        if (res[j](i) > limit_e(i))
-          res[j](i) = limit_e(i);
-      }
-      else if (measure_(i) < -limit_f(i))
-      {
-        res[j](i) = gain_(i) * (measure_(i) + limit_f(i));
-        if (res[j](i) < -limit_e(i))
-          res[j](i) = -limit_e(i);
-      }
-    }
-  }
-
-  return sva::ForceVecd(res[0], res[1]);
-}
 
 void SbsController::createGUI()
 {
