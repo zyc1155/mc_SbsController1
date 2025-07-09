@@ -16,7 +16,7 @@ using Eigen::Vector6d;
 using Eigen::VectorXd;
 
 const double GRAVITY = 9.8;
-const double HEIGHTREF = 0.95;
+const double HEIGHTREF = 0.9;
 const double A_LIM = 0.45;
 
 struct SbsController_DLLAPI SbsController : public mc_control::MCController
@@ -45,7 +45,7 @@ private:
 
   // std::shared_ptr<mc_tasks::OrientationTask> otTask;
   std::shared_ptr<mc_tasks::EndEffectorTask_NoGUI> efTask_left, efTask_right;
-  std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask_Zyc> lipmTask;
+  std::shared_ptr<mc_tasks::lipm_stabilizer::StabilizerTask> lipmTask;
 
   FILE *fp;
   bool first;

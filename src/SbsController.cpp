@@ -37,21 +37,21 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   efTask_left->selectActiveJoints(solver(), activeJoints);
   efTask_right->selectActiveJoints(solver(), activeJoints);
 
-  copAdmittance_ss=0.004;
-  copAdmittance_ds=0.008;
+  copAdmittance_ss=0.008;
+  copAdmittance_ds=0.01;
   
   auto stabiConf = robot().module().defaultLIPMStabilizerConfiguration();
   stabiConf.comHeight = HEIGHTREF;
   stabiConf.torsoPitch = 0;
   stabiConf.copAdmittance = Vector2d::Constant(copAdmittance_ds);
   stabiConf.zmpcc.comAdmittance = Vector2d{0.0, 0.0};
-  stabiConf.dcmPropGain = 4.0; // 2.0;
+  stabiConf.dcmPropGain = 1.5; // 2.0;
   stabiConf.dcmIntegralGain = 15;// 15
-  stabiConf.dcmDerivGain = 0.25;
+  stabiConf.dcmDerivGain = 0.2;
   stabiConf.dcmDerivatorTimeConstant = 5;
   stabiConf.dcmIntegratorTimeConstant = 5; // 5.0
 
-  lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask_Zyc>(
+  lipmTask = std::make_shared<mc_tasks::lipm_stabilizer::StabilizerTask>(
       solver().robots(),
       solver().realRobots(),
       0,
@@ -96,7 +96,7 @@ SbsController::SbsController(mc_rbdyn::RobotModulePtr rm, double dt, const mc_rt
   }
   // for new trajectory
   direction << 0, 0, 1;
-  limit_vel = 0.4;
+  limit_vel = 0.2;
   limit_acc = 0.45;
   limit_jerk = 8;
 
